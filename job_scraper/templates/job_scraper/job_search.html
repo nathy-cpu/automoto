@@ -2,30 +2,105 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Job Scraper</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'job_scraper/css/style.css' %}">
 </head>
 <body>
-    <h1>Job Scraper</h1>
-    <form method="post">
-        {% csrf_token %}
-        <label for="keywords">Keywords:</label>
-        <input type="text" id="keywords" name="keywords" required><br><br>
-        <label for="location">Location:</label>
-        <input type="text" id="location" name="location"><br><br>
-        <button type="submit">Search</button>
-    </form>
-    <hr>
-    {% if results is not None %}
-        <h2>Results</h2>
-        {% if results %}
-            <ul>
-                {% for job in results %}
-                    <li>{{ job }}</li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p>No results found.</p>
+    <div class="container">
+        <h1>Job Scraper</h1>
+        
+        <form method="post">
+            {% csrf_token %}
+            
+            <div class="form-group">
+                <label for="keywords">Job Keywords:</label>
+                <input type="text" id="keywords" name="keywords" placeholder="e.g., Python Developer, Data Scientist" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="location">Location:</label>
+                <input type="text" id="location" name="location" placeholder="e.g., New York, Remote">
+            </div>
+            
+            <div class="form-group">
+                <label>Select Websites to Scrape:</label>
+                <div class="checkbox-group">
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="indeed" name="websites" value="indeed" checked>
+                        <label for="indeed">Indeed</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="linkedin" name="websites" value="linkedin" checked>
+                        <label for="linkedin">LinkedIn Jobs</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="glassdoor" name="websites" value="glassdoor">
+                        <label for="glassdoor">Glassdoor</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="monster" name="websites" value="monster">
+                        <label for="monster">Monster</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="careerbuilder" name="websites" value="careerbuilder">
+                        <label for="careerbuilder">CareerBuilder</label>
+                    </div>
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="ziprecruiter" name="websites" value="ziprecruiter">
+                        <label for="ziprecruiter">ZipRecruiter</label>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="submit">Search Jobs</button>
+        </form>
+        
+        {% if results is not None %}
+            <div class="results">
+                <h2>Search Results</h2>
+                {% if results %}
+                    {% for job in results %}
+                        <div class="job-item" onclick="viewJobDetails({{ job.id }})">
+                            <div class="job-title">{{ job.title }}</div>
+                            <div class="job-company">{{ job.company }}</div>
+                            <div class="job-location">{{ job.location }}</div>
+                        </div>
+                    {% endfor %}
+                    
+                    {% if pagination %}
+                        <div class="pagination">
+                            {% if pagination.has_previous %}
+                                <a href="?page={{ pagination.previous_page_number }}&keywords={{ params.keywords|default:'' }}&location={{ params.location|default:'' }}&websites={{ params.websites|join:',' }}">&laquo; Previous</a>
+                            {% endif %}
+                            
+                            {% for num in pagination.page_range %}
+                                {% if num == pagination.number %}
+                                    <span class="current">{{ num }}</span>
+                                {% else %}
+                                    <a href="?page={{ num }}&keywords={{ params.keywords|default:'' }}&location={{ params.location|default:'' }}&websites={{ params.websites|join:',' }}">{{ num }}</a>
+                                {% endif %}
+                            {% endfor %}
+                            
+                            {% if pagination.has_next %}
+                                <a href="?page={{ pagination.next_page_number }}&keywords={{ params.keywords|default:'' }}&location={{ params.location|default:'' }}&websites={{ params.websites|join:',' }}">Next &raquo;</a>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% else %}
+                    <div class="no-results">
+                        <p>No jobs found matching your criteria.</p>
+                    </div>
+                {% endif %}
+            </div>
         {% endif %}
-    {% endif %}
+    </div>
+    
+    <script>
+        function viewJobDetails(jobId) {
+            window.open('/job/' + jobId + '/', '_blank');
+        }
+    </script>
 </body>
 </html> 
