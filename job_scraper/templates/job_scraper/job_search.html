@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Job Scraper</title>
+</head>
+<body>
+    <h1>Job Scraper</h1>
+    <form method="post">
+        {% csrf_token %}
+        <label for="keywords">Keywords:</label>
+        <input type="text" id="keywords" name="keywords" required><br><br>
+        <label for="location">Location:</label>
+        <input type="text" id="location" name="location"><br><br>
+        <button type="submit">Search</button>
+    </form>
+    <hr>
+    {% if results is not None %}
+        <h2>Results</h2>
+        {% if results %}
+            <ul>
+                {% for job in results %}
+                    <li>{{ job }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No results found.</p>
+        {% endif %}
+    {% endif %}
+</body>
+</html> 
