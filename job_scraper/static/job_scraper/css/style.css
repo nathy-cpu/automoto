@@ -139,4 +139,129 @@ button:hover {
     color: #666;
     font-style: italic;
     padding: 40px;
+}
+
+.error-message {
+    background: #f8d7da;
+    color: #721c24;
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid #f5c6cb;
+    margin-bottom: 20px;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* Loading Animation */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.loading-spinner {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #007bff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: #333;
+    font-size: 16px;
+    margin-bottom: 10px;
+}
+
+.loading-subtext {
+    color: #666;
+    font-size: 14px;
+}
+
+.loading-progress {
+    margin-top: 15px;
+    width: 100%;
+    background: #f0f0f0;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 6px;
+    background: #007bff;
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 10px;
+}
+
+.website-status {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+}
+
+.website-status.scraping {
+    color: #007bff;
+}
+
+.website-status.completed {
+    color: #28a745;
+}
+
+.website-status.error {
+    color: #dc3545;
+}
+
+/* Disable form during loading */
+.form-disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Results counter */
+.results-counter {
+    background: #e8f5e8;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border: 1px solid #c3e6c3;
+    font-weight: bold;
+}
+
+.results-counter strong {
+    color: #2d5a2d;
+    font-size: 16px;
+}
+
+.results-counter small {
+    color: #666;
+    font-size: 12px;
 } 

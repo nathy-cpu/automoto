@@ -11,65 +11,75 @@
     <div class="container">
         <a href="/" class="back-link">&larr; Back to Search</a>
         
-        <div class="header">
-            <div class="job-title">{{ job.title }}</div>
-            <div class="job-company">{{ job.company }}</div>
-            <div class="job-location">{{ job.location }}</div>
-        </div>
-        
-        <div class="info-grid">
-            <div class="info-item">
-                <div class="info-label">Industry</div>
-                <div class="info-value">{{ job.industry }}</div>
+        {% if error %}
+            <div class="error-message">
+                <p>{{ error }}</p>
             </div>
-            <div class="info-item">
-                <div class="info-label">Job Type</div>
-                <div class="info-value">{{ job.job_type }}</div>
+        {% elif job %}
+            <div class="header">
+                <div class="job-title">{{ job.title }}</div>
+                <div class="job-company">{{ job.company }}</div>
+                <div class="job-location">{{ job.location }}</div>
+                </div>
+            
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Industry</div>
+                    <div class="info-value">{{ job.industry }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Job Type</div>
+                    <div class="info-value">{{ job.job_type }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Experience Level</div>
+                    <div class="info-value">{{ job.experience_level }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Salary</div>
+                    <div class="info-value">{{ job.salary }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Posted Date</div>
+                    <div class="info-value">{{ job.posted_date }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Application Deadline</div>
+                    <div class="info-value">{{ job.deadline }}</div>
+                </div>
             </div>
-            <div class="info-item">
-                <div class="info-label">Experience Level</div>
-                <div class="info-value">{{ job.experience_level }}</div>
+            
+            <div class="section">
+                <div class="section-title">Job Description</div>
+                <div class="description">{{ job.description }}</div>
             </div>
-            <div class="info-item">
-                <div class="info-label">Salary</div>
-                <div class="info-value">{{ job.salary }}</div>
+            
+            {% if job.requirements %}
+            <div class="section">
+                <div class="section-title">Requirements</div>
+                <div class="requirements">{{ job.requirements }}</div>
             </div>
-            <div class="info-item">
-                <div class="info-label">Posted Date</div>
-                <div class="info-value">{{ job.posted_date }}</div>
+            {% endif %}
+            
+            <div class="apply-section">
+                <div class="section-title">How to Apply</div>
+                <div class="description">{{ job.application_instructions }}</div>
+                {% if job.application_link %}
+                <a href="{{ job.application_link }}" target="_blank" class="apply-button">Apply Now</a>
+                {% endif %}
             </div>
-            <div class="info-item">
-                <div class="info-label">Application Deadline</div>
-                <div class="info-value">{{ job.deadline }}</div>
+            
+            <div class="source-info">
+                <strong>Source:</strong> {{ job.source_website }}
+                {% if job.source_url %}
+                <br><strong>Original Post:</strong> <a href="{{ job.source_url }}" target="_blank">{{ job.source_url }}</a>
+                {% endif %}
             </div>
-        </div>
-        
-        <div class="section">
-            <div class="section-title">Job Description</div>
-            <div class="description">{{ job.description }}</div>
-        </div>
-        
-        {% if job.requirements %}
-        <div class="section">
-            <div class="section-title">Requirements</div>
-            <div class="requirements">{{ job.requirements }}</div>
-        </div>
+        {% else %}
+            <div class="error-message">
+                <p>Job details not found. Please go back and try searching again.</p>
+            </div>
         {% endif %}
-        
-        <div class="apply-section">
-            <div class="section-title">How to Apply</div>
-            <div class="description">{{ job.application_instructions }}</div>
-            {% if job.application_link %}
-            <a href="{{ job.application_link }}" target="_blank" class="apply-button">Apply Now</a>
-            {% endif %}
-        </div>
-        
-        <div class="source-info">
-            <strong>Source:</strong> {{ job.source_website }}
-            {% if job.source_url %}
-            <br><strong>Original Post:</strong> <a href="{{ job.source_url }}" target="_blank">{{ job.source_url }}</a>
-            {% endif %}
-        </div>
     </div>
 </body>
 </html> 

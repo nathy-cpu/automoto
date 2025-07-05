@@ -15,8 +15,9 @@
             {% csrf_token %}
             
             <div class="form-group">
-                <label for="keywords">Job Keywords:</label>
-                <input type="text" id="keywords" name="keywords" placeholder="e.g., Python Developer, Data Scientist" required>
+                <label for="keywords">Job Keywords (Optional):</label>
+                <input type="text" id="keywords" name="keywords" placeholder="e.g., Python Developer, Data Scientist">
+                <small style="color: #666; font-size: 12px;">Leave empty to search for all recent jobs in the selected location</small>
             </div>
             
             <div class="form-group">
@@ -51,6 +52,15 @@
                         <input type="checkbox" id="ziprecruiter" name="websites" value="ziprecruiter">
                         <label for="ziprecruiter">ZipRecruiter</label>
                     </div>
+                    {% for website in custom_websites %}
+                    <div class="checkbox-item">
+                        <input type="checkbox" id="{{ website.name|lower }}" name="websites" value="{{ website.name }}">
+                        <label for="{{ website.name|lower }}">{{ website.name }}</label>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div style="margin-top: 10px;">
+                    <a href="{% url 'manage_websites' %}" style="color: #007bff; text-decoration: none; font-size: 14px;">+ Add Custom Website</a>
                 </div>
             </div>
             
@@ -60,9 +70,19 @@
         {% if results is not None %}
             <div class="results">
                 <h2>Search Results</h2>
-                {% if results %}
+                {% if error %}
+                    <div class="error-message">
+                        <p>{{ error }}</p>
+                    </div>
+                {% elif results %}
+                    <div class="results-counter">
+                        <strong>Found {{ pagination.paginator.count }} job{{ pagination.paginator.count|pluralize }}</strong>
+                        {% if not params.keywords %}
+                            <br><small>Showing all recent jobs in {{ params.location|default:"United States" }} (no keywords specified)</small>
+                        {% endif %}
+                    </div>
                     {% for job in results %}
-                        <div class="job-item" onclick="viewJobDetails({{ job.id }})">
+                        <div class="job-item" onclick="viewJobDetails('{{ job.id }}')">
                             <div class="job-title">{{ job.title }}</div>
                             <div class="job-company">{{ job.company }}</div>
                             <div class="job-location">{{ job.location }}</div>
@@ -72,19 +92,19 @@
                     {% if pagination %}
                         <div class="pagination">
                             {% if pagination.has_previous %}
-                                <a href="?page={{ pagination.previous_page_number }}&keywords={{ params.keywords|default:'' }}&location={{ params.location|default:'' }}&websites={{ params.websites|join:',' }}">&laquo; Previous</a>
+                                <a href="?page={{ pagination.previous_page_number }}">&laquo; Previous</a>
                             {% endif %}
                             
                             {% for num in pagination.page_range %}
                                 {% if num == pagination.number %}
                                     <span class="current">{{ num }}</span>
                                 {% else %}
-                                    <a href="?page={{ num }}&keywords={{ params.keywords|default:'' }}&location={{ params.location|default:'' }}&websites={{ params.websites|join:',' }}">{{ num }}</a>
+                                    <a href="?page={{ num }}">{{ num }}</a>
                                 {% endif %}
                             {% endfor %}
                             
                             {% if pagination.has_next %}
-                                <a href="?page={{ pagination.next_page_number }}&keywords={{ params.keywords|default:'' }}&location={{ params.location|default:'' }}&websites={{ params.websites|join:',' }}">Next &raquo;</a>
+                                <a href="?page={{ pagination.next_page_number }}">Next &raquo;</a>
                             {% endif %}
                         </div>
                     {% endif %}
@@ -97,10 +117,47 @@
         {% endif %}
     </div>
     
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <div class="loading-text">Searching for jobs...</div>
+            <div class="loading-subtext">This may take a few moments</div>
+            <div class="loading-progress">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="website-status" id="websiteStatus">Initializing...</div>
+        </div>
+    </div>
+
     <script>
         function viewJobDetails(jobId) {
-            window.open('/job/' + jobId + '/', '_blank');
+            console.log('Clicking job with ID:', jobId);
+            // Remove quotes if they exist (from Django template)
+            const cleanJobId = jobId.toString().replace(/['"]/g, '');
+            const url = '/job/' + cleanJobId + '/';
+            console.log('Opening URL:', url);
+            window.open(url, '_blank');
         }
+        
+        // Show loading animation when form is submitted
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.querySelector('form');
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            
+            form.addEventListener('submit', function() {
+                // Show loading overlay
+                loadingOverlay.style.display = 'flex';
+                
+                // Disable form to prevent multiple submissions
+                form.classList.add('form-disabled');
+                
+                // Optional: Add a small delay to ensure the overlay shows
+                setTimeout(function() {
+                    form.submit();
+                }, 100);
+            });
+        });
     </script>
 </body>
 </html> 

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Custom Websites - Job Scraper</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'job_scraper/css/style.css' %}">
+    <style>
+        .website-form {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .website-list {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .website-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .website-name {
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 5px;
+        }
+        .website-url {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .delete-btn:hover {
+            background: #c82333;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        .help-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Manage Custom Websites</h1>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="{% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <div class="website-form">
+            <h2>Add New Website</h2>
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name">Website Name:</label>
+                        <input type="text" id="name" name="name" required>
+                        <div class="help-text">A unique name for this website (e.g., "MyJobSite")</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="base_url">Base URL:</label>
+                        <input type="url" id="base_url" name="base_url" required>
+                        <div class="help-text">Main website URL (e.g., https://example.com)</div>
+                    </div>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="search_url">Search URL Template:</label>
+                    <input type="url" id="search_url" name="search_url" required>
+                    <div class="help-text">URL template with placeholders: {keywords}, {location}, {page} (e.g., https://example.com/jobs?q={keywords}&loc={location}&page={page})</div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="job_list_selector">Job List Selector:</label>
+                        <input type="text" id="job_list_selector" name="job_list_selector" required>
+                        <div class="help-text">CSS selector for job listing containers (e.g., .job-item)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="title_selector">Job Title Selector:</label>
+                        <input type="text" id="title_selector" name="title_selector" required>
+                        <div class="help-text">CSS selector for job title (e.g., .job-title)</div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="company_selector">Company Selector:</label>
+                        <input type="text" id="company_selector" name="company_selector" required>
+                        <div class="help-text">CSS selector for company name (e.g., .company-name)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location_selector">Location Selector:</label>
+                        <input type="text" id="location_selector" name="location_selector" required>
+                        <div class="help-text">CSS selector for job location (e.g., .job-location)</div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="job_link_selector">Job Link Selector:</label>
+                        <input type="text" id="job_link_selector" name="job_link_selector" required>
+                        <div class="help-text">CSS selector for job detail link (e.g., a.job-link)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="salary_selector">Salary Selector (Optional):</label>
+                        <input type="text" id="salary_selector" name="salary_selector">
+                        <div class="help-text">CSS selector for salary information</div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="date_selector">Date Selector (Optional):</label>
+                        <input type="text" id="date_selector" name="date_selector">
+                        <div class="help-text">CSS selector for posted date</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="apply_link_selector">Apply Link Selector (Optional):</label>
+                        <input type="text" id="apply_link_selector" name="apply_link_selector">
+                        <div class="help-text">CSS selector for direct apply link</div>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="description_selector">Description Selector (Optional):</label>
+                        <input type="text" id="description_selector" name="description_selector">
+                        <div class="help-text">CSS selector for job description</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="requirements_selector">Requirements Selector (Optional):</label>
+                        <input type="text" id="requirements_selector" name="requirements_selector">
+                        <div class="help-text">CSS selector for job requirements</div>
+                    </div>
+                </div>
+                
+                <button type="submit">Add Website</button>
+            </form>
+        </div>
+        
+        <div class="website-list">
+            <h2>Custom Websites</h2>
+            {% if custom_websites %}
+                {% for website in custom_websites %}
+                    <div class="website-item">
+                        <div class="website-name">{{ website.name }}</div>
+                        <div class="website-url">{{ website.base_url }}</div>
+                        <div style="margin-top: 10px;">
+                            <a href="{% url 'delete_website' website.id %}" class="delete-btn" onclick="return confirm('Are you sure you want to delete this website?')">Delete</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p>No custom websites added yet.</p>
+            {% endif %}
+        </div>
+        
+        <div style="margin-top: 30px;">
+            <a href="/" class="back-link">&larr; Back to Job Search</a>
+        </div>
+    </div>
+</body>
+</html> 
