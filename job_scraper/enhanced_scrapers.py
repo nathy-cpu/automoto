@@ -227,6 +227,12 @@ class EnhancedJobScraper:
                         if job_data:
                             # Get detailed job information
                             detailed_job = self._get_linkedin_job_details(job_data['job_url'])
+                            
+                            # Skip jobs that are filtered out (EasyApply jobs)
+                            if detailed_job.get('filtered_out'):
+                                logger.info(f"Skipping LinkedIn job: {detailed_job.get('reason', 'Unknown reason')}")
+                                continue
+                            
                             job_data.update(detailed_job)
                             jobs.append(job_data)
                     except Exception as e:
@@ -263,6 +269,29 @@ class EnhancedJobScraper:
             date_elem = card.find('time')
             posted_date = self._clean_text(date_elem.get_text()) if date_elem else ""
             
+            # Check for EasyApply indicators in the job card itself
+            card_text = card.get_text().lower()
+            easy_apply_indicators = [
+                'easy apply',
+                'easyapply',
+                'quick apply',
+                'apply with linkedin',
+                'apply with profile',
+                'apply with your linkedin profile',
+                'one-click apply',
+                'apply with one click',
+                'apply with your profile',
+                'apply with your resume',
+                'apply with your linkedin',
+                'apply with linkedin profile',
+                'apply with linkedin resume'
+            ]
+            
+            for indicator in easy_apply_indicators:
+                if indicator in card_text:
+                    logger.info(f"Filtering out LinkedIn job card with EasyApply indicator: {indicator}")
+                    return None
+            
             return {
                 'id': job_id,
                 'title': title,
@@ -286,6 +315,45 @@ class EnhancedJobScraper:
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
+            # Check for EasyApply - filter out these jobs
+            easy_apply_indicators = [
+                'easy apply',
+                'easyapply',
+                'quick apply',
+                'apply with linkedin',
+                'apply with profile',
+                'apply with your linkedin profile',
+                'one-click apply',
+                'apply with one click',
+                'apply with your profile',
+                'apply with your resume',
+                'apply with your linkedin',
+                'apply with linkedin profile',
+                'apply with linkedin resume'
+            ]
+            
+            # Check in the page content for EasyApply indicators
+            page_text = soup.get_text().lower()
+            for indicator in easy_apply_indicators:
+                if indicator in page_text:
+                    logger.info(f"Filtering out LinkedIn job with EasyApply: {job_url}")
+                    return {'filtered_out': True, 'reason': 'EasyApply detected'}
+            
+            # Check for EasyApply button specifically
+            easy_apply_button = soup.find('button', string=re.compile(r'easy\s*apply', re.IGNORECASE))
+            if easy_apply_button:
+                logger.info(f"Filtering out LinkedIn job with EasyApply button: {job_url}")
+                return {'filtered_out': True, 'reason': 'EasyApply button detected'}
+            
+            # Check for apply button text that indicates EasyApply
+            apply_button = soup.find('a', class_='apply-button')
+            if apply_button:
+                button_text = apply_button.get_text().lower()
+                for indicator in easy_apply_indicators:
+                    if indicator in button_text:
+                        logger.info(f"Filtering out LinkedIn job with EasyApply in button text: {job_url}")
+                        return {'filtered_out': True, 'reason': 'EasyApply in button text'}
+            
             # Extract description
             description_elem = soup.find('div', class_='show-more-less-html')
             description = self._clean_text(description_elem.get_text()) if description_elem else ""
@@ -294,10 +362,9 @@ class EnhancedJobScraper:
             requirements = self._extract_requirements(description)
             
             # Look for apply button
-            apply_elem = soup.find('a', class_='apply-button')
             application_link = ""
-            if apply_elem:
-                application_link = apply_elem.get('href')
+            if apply_button:
+                application_link = apply_button.get('href')
                 if application_link and not application_link.startswith('http'):
                     application_link = urljoin(job_url, application_link)
             
