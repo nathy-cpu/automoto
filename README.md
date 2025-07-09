@@ -188,20 +188,40 @@ Consider using IIS or Apache with mod_wsgi for production deployment.
 
 ## 🔍 Testing
 
-### Test the Setup
+### Run All Django Tests
 ```bash
-python test_setup.py
-```
-
-### Test EasyApply Filtering
-```bash
-python test_easyapply_filter.py
-```
-
-### Run Django Tests
-```bash
+# Run all tests
 python manage.py test
+
+# Run with verbose output
+python manage.py test --verbosity=2
+
+# Run specific test classes
+python manage.py test job_scraper.tests.SetupTestCase
+python manage.py test job_scraper.tests.ModelTestCase
+python manage.py test job_scraper.tests.ScrapingTestCase
 ```
+
+### Test Coverage
+```bash
+# Install coverage
+pip install coverage
+
+# Run tests with coverage
+coverage run --source='.' manage.py test
+
+# Generate coverage report
+coverage report
+
+# Generate HTML coverage report
+coverage html
+```
+
+### Test Categories
+- **Setup Tests**: Django configuration, imports, and basic setup
+- **Model Tests**: Database models, relationships, and data validation
+- **Scraping Tests**: Job scraping functionality and error handling
+- **Integration Tests**: Complete workflow testing
 
 ## 🎨 Code Formatting
 
