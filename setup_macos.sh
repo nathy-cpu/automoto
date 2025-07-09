@@ -80,6 +80,10 @@ pip install --upgrade pip
 print_status "Installing Python dependencies..."
 pip install -r requirements.txt
 
+# Install development dependencies (optional)
+print_status "Installing development dependencies..."
+pip install -r requirements-dev.txt
+
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
     print_status "Creating .env file with default settings..."
@@ -119,9 +123,13 @@ else:
     print('Superuser already exists')
 "
 
-# Collect static files
+# Collect static files (skip if no static files exist)
 print_status "Collecting static files..."
-python manage.py collectstatic --noinput
+if [ -d "static" ] || [ -d "job_scraper/static" ]; then
+    python manage.py collectstatic --noinput
+else
+    print_status "No static files found, skipping collectstatic"
+fi
 
 # Create run script
 print_status "Creating run script..."

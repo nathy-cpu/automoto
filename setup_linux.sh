@@ -86,6 +86,10 @@ pip install --upgrade pip
 print_status "Installing Python dependencies..."
 pip install -r requirements.txt
 
+# Install development dependencies (optional)
+print_status "Installing development dependencies..."
+pip install -r requirements-dev.txt
+
 # Create .env file if it doesn't exist
 if [ ! -f .env ]; then
     print_status "Creating .env file with default settings..."
@@ -125,9 +129,13 @@ else:
     print('Superuser already exists')
 "
 
-# Collect static files
+# Collect static files (skip if no static files exist)
 print_status "Collecting static files..."
-python manage.py collectstatic --noinput
+if [ -d "static" ] || [ -d "job_scraper/static" ]; then
+    python manage.py collectstatic --noinput
+else
+    print_status "No static files found, skipping collectstatic"
+fi
 
 # Create run script
 print_status "Creating run script..."
@@ -191,76 +199,9 @@ EOF
 
 chmod +x setup_production.sh
 
-# Create test script
-print_status "Creating test script..."
-cat > test_app.py << 'EOF'
-#!/usr/bin/env python3
-"""
-Test script to verify the application setup
-"""
-
-import os
-import sys
-import django
-from django.conf import settings
-
-# Add the project directory to Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-# Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'automoto.settings')
-django.setup()
-
-def test_setup():
-    """Test the application setup"""
-    print("🧪 Testing AutoMoto Job Scraper setup...")
-    print("=" * 50)
-    
-    # Test database connection
-    try:
-        from django.db import connection
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1")
-        print("✅ Database connection: OK")
-    except Exception as e:
-        print(f"❌ Database connection: FAILED - {e}")
-        return False
-    
-    # Test models
-    try:
-        from job_scraper.models import CustomWebsite
-        print("✅ Models: OK")
-    except Exception as e:
-        print(f"❌ Models: FAILED - {e}")
-        return False
-    
-    # Test scraper
-    try:
-        from job_scraper.enhanced_scrapers import EnhancedJobScraper
-        scraper = EnhancedJobScraper()
-        print("✅ Scraper: OK")
-    except Exception as e:
-        print(f"❌ Scraper: FAILED - {e}")
-        return False
-    
-    # Test settings
-    try:
-        print(f"✅ Django version: {django.get_version()}")
-        print(f"✅ Debug mode: {settings.DEBUG}")
-        print(f"✅ Database: {settings.DATABASES['default']['ENGINE']}")
-    except Exception as e:
-        print(f"❌ Settings: FAILED - {e}")
-        return False
-    
-    print("=" * 50)
-    print("🎉 All tests passed! Setup is complete.")
-    return True
-
-if __name__ == "__main__":
-    success = test_setup()
-    sys.exit(0 if success else 1)
-EOF
-
+# Copy the test script
+print_status "Setting up test script..."
+cp test_setup.py test_app.py
 chmod +x test_app.py
 
 # Create README for this setup
