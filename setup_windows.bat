@@ -62,6 +62,10 @@ python -m pip install --upgrade pip
 REM Install Python dependencies
 echo [INFO] Installing Python dependencies...
 pip install -r requirements.txt
+
+REM Install development dependencies (optional)
+echo [INFO] Installing development dependencies...
+pip install -r requirements-dev.txt
 if %errorLevel% neq 0 (
     echo [ERROR] Failed to install dependencies.
     pause
@@ -100,9 +104,15 @@ REM Create superuser if it doesn't exist
 echo [INFO] Creating superuser ^(if needed^)...
 python manage.py shell -c "from django.contrib.auth.models import User; User.objects.get_or_create(username='admin', defaults={'is_superuser': True, 'is_staff': True, 'email': 'admin@example.com'})[0].set_password('admin123') and None or print('Superuser created: admin/admin123')"
 
-REM Collect static files
+REM Collect static files (skip if no static files exist)
 echo [INFO] Collecting static files...
-python manage.py collectstatic --noinput
+if exist static\ (
+    python manage.py collectstatic --noinput
+) else if exist job_scraper\static\ (
+    python manage.py collectstatic --noinput
+) else (
+    echo [INFO] No static files found, skipping collectstatic
+)
 
 REM Create run script
 echo [INFO] Creating run script...

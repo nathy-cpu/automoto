@@ -1,0 +1,14 @@
+# Production requirements for AutoMoto Job Scraper
+# Install with: pip install -r requirements-prod.txt
+
+# Include runtime dependencies
+-r requirements.txt
+
+# Production web server
+gunicorn==21.2.0
+
+# Static file serving
+whitenoise==6.6.0
+
+# PostgreSQL database adapter (for production)
+psycopg2-binary==2.9.7 

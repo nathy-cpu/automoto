@@ -1,27 +1,14 @@
 # Django and core dependencies
-Django==4.2.7
-django-environ==0.11.2
+Django==5.0.7
 
 # Web scraping dependencies
 requests==2.31.0
 beautifulsoup4==4.12.2
-lxml==4.9.3
+html5lib==1.1
 
-# Database dependencies
-psycopg2-binary==2.9.7
-
-# Development and production dependencies
-gunicorn==21.2.0
-whitenoise==6.6.0
-
-# Additional utilities
+# Environment configuration
 python-dotenv==1.0.0
-Pillow==10.0.1
 
 # Testing dependencies
 pytest==7.4.3
 pytest-django==4.7.0
-
-# Code quality
-black==23.11.0
-flake8==6.1.0 

@@ -1,0 +1,10 @@
+# Development requirements for AutoMoto Job Scraper
+# Install with: pip install -r requirements-dev.txt
+
+# Include runtime dependencies
+-r requirements.txt
+
+# Code quality and formatting tools
+black==24.1.1
+autopep8==2.3.2
+isort==5.13.2 

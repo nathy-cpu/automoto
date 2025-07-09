@@ -88,8 +88,20 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 ### 3. Install Dependencies
+
+**For development (recommended):**
+```bash
+pip install -r requirements-dev.txt
+```
+
+**For runtime only:**
 ```bash
 pip install -r requirements.txt
+```
+
+**For production:**
+```bash
+pip install -r requirements-prod.txt
 ```
 
 ### 4. Configure Environment
@@ -178,7 +190,7 @@ Consider using IIS or Apache with mod_wsgi for production deployment.
 
 ### Test the Setup
 ```bash
-python test_app.py
+python test_setup.py
 ```
 
 ### Test EasyApply Filtering
@@ -191,136 +203,54 @@ python test_easyapply_filter.py
 python manage.py test
 ```
 
+## 🎨 Code Formatting
+
+The project uses several tools to ensure PEP8 compliance and consistent code formatting:
+
+### Install Development Dependencies
+```bash
+pip install -r requirements-dev.txt
+```
+
+### Format Code with Black
+```bash
+# Format all Python files
+black .
+
+# Check formatting without making changes
+black . --check
+```
+
+### Sort Imports with isort
+```bash
+# Sort imports in all Python files
+isort .
+
+# Check import sorting without making changes
+isort . --check-only
+```
+
+### Fix PEP8 Issues with autopep8
+```bash
+# Fix PEP8 issues in all Python files
+autopep8 --in-place --recursive .
+
+# Show what would be changed without making changes
+autopep8 --diff --recursive .
+```
+
+### Complete Formatting Workflow
+```bash
+# 1. Sort imports
+isort .
+
+# 2. Format with Black
+black .
+
+# 3. Fix PEP8 issues
+autopep8 --in-place --recursive .
+```
+
 ## 📁 Project Structure
 
 ```
-automoto/
-├── automoto/                 # Django project settings
-│   ├── settings.py
-│   ├── urls.py
-│   └── wsgi.py
-├── job_scraper/             # Main application
-│   ├── models.py
-│   ├── views.py
-│   ├── urls.py
-│   ├── enhanced_scrapers.py
-│   └── templates/
-├── setup_linux.sh           # Linux setup script
-├── setup_windows.bat        # Windows setup script
-├── setup_macos.sh           # macOS setup script
-├── requirements.txt          # Python dependencies
-├── manage.py                # Django management
-└── README.md               # This file
-```
-
-## 🛠️ Configuration
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DEBUG` | Django debug mode | `True` |
-| `SECRET_KEY` | Django secret key | Auto-generated |
-| `ALLOWED_HOSTS` | Allowed hostnames | `localhost,127.0.0.1` |
-| `DATABASE_URL` | Database connection | `sqlite:///db.sqlite3` |
-| `SCRAPING_DELAY` | Delay between requests | `2` |
-| `MAX_PAGES_PER_SITE` | Max pages to scrape | `5` |
-| `REQUEST_TIMEOUT` | Request timeout | `30` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-
-### Custom Website Configuration
-
-Add custom websites through the admin panel with:
-- **Name**: Website name
-- **Base URL**: Website base URL
-- **Search URL**: URL template with placeholders
-- **CSS Selectors**: Selectors for job data extraction
-- **Active Status**: Enable/disable the website
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Permission Denied**
-   ```bash
-   chmod +x setup_*.sh
-   ```
-
-2. **Python Version Issues**
-   - Linux: Script installs Python 3.9 if needed
-   - macOS: Script installs Python 3.9 via Homebrew
-   - Windows: Install Python 3.8+ manually
-
-3. **Database Errors**
-   ```bash
-   python manage.py migrate
-   ```
-
-4. **Port Already in Use**
-   ```bash
-   # Kill process on port 8000
-   lsof -ti:8000 | xargs kill -9
-   ```
-
-5. **Scraping Issues**
-   - Check internet connection
-   - Verify website accessibility
-   - Check rate limiting settings
-
-### Logs
-
-- **Application Logs**: Check console output
-- **Django Logs**: Check console output
-- **System Logs**: 
-  - Linux: `journalctl -u automoto`
-  - macOS: `log show --predicate 'process == "automoto"'`
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Support
-
-For issues and questions:
-1. Check the troubleshooting section
-2. Review the logs
-3. Create an issue on GitHub
-4. Check the documentation
-
-## 🔄 Updates
-
-To update the application:
-
-1. **Pull latest changes**
-   ```bash
-   git pull origin main
-   ```
-
-2. **Update dependencies**
-   ```bash
-   pip install -r requirements.txt --upgrade
-   ```
-
-3. **Run migrations**
-   ```bash
-   python manage.py migrate
-   ```
-
-4. **Restart the application**
-   ```bash
-   # Stop current instance
-   # Run the application again
-   ./run.sh
-   ```
-
----
-
-**Happy Job Hunting! 🎯** 
