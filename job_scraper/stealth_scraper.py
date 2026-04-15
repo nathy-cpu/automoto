@@ -1,5 +1,6 @@
 import asyncio
 import random
+import time
 import logging
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
@@ -39,9 +40,21 @@ class StealthScraper:
             logger.info(f"Navigating to {search_url}")
             
             try:
-                page.goto(search_url, wait_until="networkidle")
-                # Wait for job cards
-                page.wait_for_selector('[data-jk]', timeout=15000)
+                # Use a slower, more human-like wait
+                page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
+                
+                # Randomized sleep to mimic human reading
+                time.sleep(random.uniform(3, 7))
+                
+                # Scroll a bit to trigger lazy loading
+                page.evaluate("window.scrollTo(0, 500)")
+                time.sleep(1)
+
+                # Wait for job cards with a fallback
+                try:
+                    page.wait_for_selector('[data-jk]', timeout=30000)
+                except Exception:
+                    logger.warning("Job cards selector timeout, checking page content...")
                 
                 # Check for "reCAPTCHA" or other blocks
                 if "hcaptcha" in page.content().lower() or "recaptcha" in page.content().lower():
@@ -114,6 +127,19 @@ class StealthScraper:
 
             except Exception as e:
                 logger.error(f"Scrape failed: {e}")
+                # Optional: screenshot for debugging in non-docker environments
+                # page.screenshot(path="scrape_fail.png")
                 return []
             finally:
                 browser.close()
+
+    def _get_description(self, page, job_url):
+        """Fetch job description from a specific job URL."""
+        try:
+            page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
+            time.sleep(random.uniform(1, 3))
+            desc_elem = page.query_selector('#jobDescriptionText')
+            return desc_elem.inner_text() if desc_elem else ""
+        except Exception as e:
+            logger.error(f"Failed to get description for {job_url}: {e}")
+            return ""

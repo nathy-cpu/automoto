@@ -6,6 +6,7 @@ from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .scrapers import EnhancedJobScraper
+from .stealth_scraper import StealthScraper
 from .models import CustomWebsite, Job, Contact
 from .utils import get_continent_from_country
 
@@ -81,6 +82,31 @@ def dashboard(request: HttpRequest):
     return render(request, "job_scraper/dashboard.html", context)
 
 
+def trigger_scrape(request: HttpRequest):
+    """
+    Manually triggers the scraper from the dashboard.
+    """
+    keywords = request.GET.get("q", "software contract")
+    location = request.GET.get("countries", "us")
+    
+    # Run scraper (synchronous for now to show results immediately)
+    scraper = StealthScraper(headless=True)
+    new_jobs = scraper.scrape_indeed(keywords, location, max_pages=1)
+    
+    # Basic lead enrichment toggle for the newly found jobs
+    from django.conf import settings
+    if settings.DEBUG_ENRICHMENT:
+        from .apollo_client import ApolloClient
+        apollo = ApolloClient()
+        for job in new_jobs[:5]:
+            try:
+                apollo.enrich_job_contacts(job)
+            except:
+                pass
+
+    return redirect("dashboard")
+
+
 def _build_job_list(scraped_jobs: list[dict]) -> list[dict]:
     jobs_data = []
     for i, job in enumerate(scraped_jobs, start=1):
@@ -142,9 +168,15 @@ def job_search(request: HttpRequest):
         try:
             country = str(location).strip() or "us"
             search_keywords = str(keywords).strip() or None
+            
+            # Use StealthScraper for Indeed
+            if "indeed" in [w.lower() for w in websites]:
+                scraper = StealthScraper(headless=True)
+                scraper.scrape_indeed(search_keywords, country, max_pages=1)
+
             enhanced_scraper = EnhancedJobScraper()
             scraped_jobs = enhanced_scraper.get_recent_jobs(
-                websites, country, search_keywords, max_pages=15
+                websites, country, search_keywords, max_pages=5
             )
             jobs_data = _build_job_list(scraped_jobs)
 
