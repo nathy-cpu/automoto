@@ -45,8 +45,12 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_apscheduler",
     "job_scraper",
 ]
+
+# Enrichment Debug Mode (Minimal Credit Usage)
+DEBUG_ENRICHMENT = os.getenv("DEBUG_ENRICHMENT", "True").lower() == "true"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

@@ -25,6 +25,10 @@ class Job(models.Model):
         max_length=100
     )  # indeed, linkedin, custom website, etc.
     source_url = models.URLField(blank=True)
+    continent = models.CharField(max_length=100, blank=True)
+    expertise_tags = models.TextField(blank=True, help_text="Comma-separated expertise/skills")
+    needs_summary = models.TextField(blank=True, help_text="AI-generated summary of client needs")
+    is_rfp = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -73,3 +77,21 @@ class CustomWebsite(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Contact(models.Model):
+    """Model to store enriched contact information for leads"""
+
+    job = models.ForeignKey(Job, on_delete=models.CASCADE, related_name="contacts")
+    name = models.CharField(max_length=200)
+    title = models.CharField(max_length=200, blank=True)
+    email = models.EmailField(blank=True, null=True)
+    phone = models.CharField(max_length=50, blank=True)
+    linkedin_url = models.URLField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.name} ({self.title}) at {self.job.company}"

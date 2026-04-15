@@ -6,12 +6,79 @@ from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 
 from .scrapers import EnhancedJobScraper
-from .models import CustomWebsite
+from .models import CustomWebsite, Job, Contact
+from .utils import get_continent_from_country
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_WEBSITES = ["indeed", "linkedin"]
 RESULTS_PER_PAGE = 10
+
+
+def dashboard(request: HttpRequest):
+    """
+    Premium Dashboard view for sales teams to filter and manage leads.
+    """
+    queryset = Job.objects.all().prefetch_related("contacts")
+
+    # Filtering
+    def parse_filter(val):
+        if not val:
+            return []
+        if isinstance(val, list):
+            return val
+        return [v.strip() for v in val.split(",") if v.strip()]
+
+    continents = parse_filter(request.GET.get("continents"))
+    countries = parse_filter(request.GET.get("countries"))
+    industries = parse_filter(request.GET.get("industries"))
+    expertise = request.GET.get("expertise")
+    is_rfp = request.GET.get("is_rfp")
+
+    if continents:
+        queryset = queryset.filter(continent__in=continents)
+    if countries:
+        queryset = queryset.filter(country__in=countries)
+    if industries:
+        queryset = queryset.filter(industry__in=industries)
+    if expertise:
+        queryset = queryset.filter(expertise_tags__icontains=expertise)
+    if is_rfp:
+        queryset = queryset.filter(is_rfp=True)
+
+    # Search
+    q = request.GET.get("q")
+    if q:
+        queryset = queryset.filter(title__icontains=q) | queryset.filter(company__icontains=q)
+
+    # Sort
+    queryset = queryset.order_by("-created_at")
+
+    paginator = Paginator(queryset, RESULTS_PER_PAGE)
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+
+    # Meta data for filters
+    all_continents = Job.objects.values_list("continent", flat=True).distinct()
+    all_countries = Job.objects.values_list("country", flat=True).distinct()
+    all_industries = Job.objects.values_list("industry", flat=True).distinct()
+
+    context = {
+        "jobs": page_obj,
+        "all_continents": [c for c in all_continents if c],
+        "all_countries": [c for c in all_countries if c],
+        "all_industries": [i for i in all_industries if i],
+        "filters": {
+            "continents": continents,
+            "countries": countries,
+            "industries": industries,
+            "expertise": expertise,
+            "is_rfp": is_rfp,
+            "q": q,
+        }
+    }
+
+    return render(request, "job_scraper/dashboard.html", context)
 
 
 def _build_job_list(scraped_jobs: list[dict]) -> list[dict]:

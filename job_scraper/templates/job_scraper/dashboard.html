@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Lead Dashboard | AutoMoto</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --primary: #38bdf8;
+            --primary-glow: rgba(56, 189, 248, 0.3);
+            --secondary: #818cf8;
+            --accent: #f472b6;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Animated Background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+                        radial-gradient(circle at 10% 10%, rgba(129, 140, 248, 0.05) 0%, transparent 50%);
+            z-index: -1;
+        }
+
+        header {
+            padding: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            padding: 2rem;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        /* Sidebar Filters */
+        .sidebar {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            height: fit-content;
+            backdrop-filter: blur(20px);
+            position: sticky;
+            top: 6rem;
+        }
+
+        .sidebar h2 {
+            font-size: 1.2rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .filter-group {
+            margin-bottom: 1.5rem;
+        }
+
+        .filter-label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        select, input {
+            width: 100%;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--glass-border);
+            border-radius: 0.75rem;
+            padding: 0.75rem;
+            color: var(--text-main);
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--primary);
+        }
+
+        .btn-apply {
+            width: 100%;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-apply:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
+        }
+
+        /* Main Content */
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .job-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            transition: transform 0.3s, border-color 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .job-card:hover {
+            transform: scale(1.01);
+            border-color: rgba(56, 189, 248, 0.4);
+        }
+
+        .job-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .job-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .company-name {
+            font-size: 1rem;
+            font-weight: 400;
+            color: var(--text-dim);
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-rfp { background: rgba(244, 114, 182, 0.2); color: var(--accent); }
+        .badge-loc { background: rgba(56, 189, 248, 0.2); color: var(--primary); }
+
+        .job-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .needs-summary {
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: #d1d5db;
+        }
+
+        .contacts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .contact-item {
+            background: rgba(15, 23, 42, 0.3);
+            padding: 0.75rem;
+            border-radius: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .contact-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, var(--secondary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+        }
+
+        .contact-info h4 { font-size: 0.9rem; }
+        .contact-info p { font-size: 0.8rem; color: var(--text-dim); }
+
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+            padding-bottom: 4rem;
+        }
+
+        .page-link {
+            padding: 0.5rem 1rem;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 0.5rem;
+            color: var(--text-main);
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .page-link.active {
+            background: var(--primary);
+            color: var(--bg-dark);
+            font-weight: 700;
+        }
+
+        @media (max-width: 1024px) {
+            .container { grid-template-columns: 1fr; }
+            .sidebar { position: static; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">AutoMoto Sales Pro</div>
+        <div class="actions">
+            <!-- Add future action buttons here -->
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Sidebar Filters -->
+        <aside class="sidebar">
+            <form method="get" action="{% url 'dashboard' %}">
+                <h2>Filters</h2>
+                
+                <div class="filter-group">
+                    <label class="filter-label">Search</label>
+                    <input type="text" name="q" value="{{ filters.q }}" placeholder="Company or Title...">
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Continents (comma separated)</label>
+                    <input type="text" name="continents" value="{{ filters.continents|join:', ' }}" placeholder="e.g. North America, Europe" list="continent-list">
+                    <datalist id="continent-list">
+                        <option value="North America">
+                        <option value="South America">
+                        <option value="Europe">
+                        <option value="Africa">
+                        <option value="Asia">
+                        <option value="Oceania">
+                        <option value="Antarctica">
+                        {% for continent in all_continents %}
+                            <option value="{{ continent }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Countries (comma separated)</label>
+                    <input type="text" name="countries" value="{{ filters.countries|join:', ' }}" placeholder="e.g. USA, UK, France" list="country-list">
+                    <datalist id="country-list">
+                        {% for country in all_countries %}
+                            <option value="{{ country }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Industries (comma separated)</label>
+                    <input type="text" name="industries" value="{{ filters.industries|join:', ' }}" placeholder="e.g. Finance, Tech" list="industry-list">
+                    <datalist id="industry-list">
+                        {% for industry in all_industries %}
+                            <option value="{{ industry }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+
+                <div class="filter-group">
+                    <label class="filter-label">Expertise</label>
+                    <input type="text" name="expertise" value="{{ filters.expertise }}" placeholder="e.g. Python, AI...">
+                </div>
+
+                <div class="filter-group">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                        <input type="checkbox" name="is_rfp" value="True" {% if filters.is_rfp %}checked{% endif %} style="width: auto;">
+                        <span class="filter-label" style="margin-bottom: 0;">Show only RFPs</span>
+                    </label>
+                </div>
+
+                <button type="submit" class="btn-apply">Refresh Leads</button>
+                <a href="{% url 'dashboard' %}" style="display: block; text-align: center; margin-top: 1rem; color: var(--text-dim); text-decoration: none; font-size: 0.85rem;">Clear All</a>
+            </form>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            {% if jobs %}
+                {% for job in jobs %}
+                    <div class="job-card">
+                        <div class="job-header">
+                            <div>
+                                <h3 class="job-title">{{ job.title }}</h3>
+                                <div class="company-name">{{ job.company }} &bull; {{ job.location }}</div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+                                {% if job.is_rfp %}
+                                    <span class="badge badge-rfp">RFP</span>
+                                {% endif %}
+                                <span class="badge badge-loc">{{ job.continent }}</span>
+                            </div>
+                        </div>
+
+                        <div class="job-details">
+                            <div class="needs-section">
+                                <div class="section-title">WHAT THEY WANT</div>
+                                <div class="needs-summary">
+                                    {% if job.needs_summary %}
+                                        {{ job.needs_summary }}
+                                    {% else %}
+                                        {{ job.description|truncatewords:40 }}
+                                    {% endif %}
+                                </div>
+                                <a href="{{ job.source_url }}" target="_blank" style="display: inline-block; margin-top: 1rem; color: var(--primary); font-size: 0.85rem; text-decoration: none;">View Original Posting &rarr;</a>
+                            </div>
+
+                            <div class="contacts-section">
+                                <div class="section-title">POTENTIAL CONTACTS</div>
+                                <div class="contacts-list">
+                                    {% for contact in job.contacts.all %}
+                                        <div class="contact-item">
+                                            <div class="contact-avatar">{{ contact.name|slice:":1" }}</div>
+                                            <div class="contact-info">
+                                                <h4>{{ contact.name }}</h4>
+                                                <p>{{ contact.title }}</p>
+                                                <div style="margin-top: 0.25rem;">
+                                                    {% if contact.email %}
+                                                        <a href="mailto:{{ contact.email }}" title="Email" style="color: var(--primary); text-decoration: none; margin-right: 0.5rem;">&#9993;</a>
+                                                    {% endif %}
+                                                    {% if contact.linkedin_url %}
+                                                        <a href="{{ contact.linkedin_url }}" target="_blank" title="LinkedIn" style="color: var(--secondary); text-decoration: none;">&#128101;</a>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% empty %}
+                                        <p style="font-size: 0.85rem; color: var(--text-dim); italic">Enrichment pending or no contacts found.</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="job-card" style="text-align: center; padding: 4rem;">
+                    <h3>No leads found matching your criteria.</h3>
+                    <p style="color: var(--text-dim); margin-top: 1rem;">Try adjusting your filters or run the scraper to fetch new data.</p>
+                </div>
+            {% endif %}
+
+            <!-- Pagination -->
+            {% if jobs.has_other_pages %}
+                <div class="pagination">
+                    {% if jobs.has_previous %}
+                        <a href="?page={{ jobs.previous_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="page-link">&laquo;</a>
+                    {% endif %}
+                    
+                    {% for num in jobs.paginator.page_range %}
+                        {% if jobs.number == num %}
+                            <a href="#" class="page-link active">{{ num }}</a>
+                        {% elif num > jobs.number|add:'-3' and num < jobs.number|add:'3' %}
+                            <a href="?page={{ num }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="page-link">{{ num }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if jobs.has_next %}
+                        <a href="?page={{ jobs.next_page_number }}{% if request.GET.urlencode %}&{{ request.GET.urlencode }}{% endif %}" class="page-link">&raquo;</a>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </main>
+    </div>
+
+</body>
+</html>

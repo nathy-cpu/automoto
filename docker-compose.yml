@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    command: python manage.py runserver 0.0.0.0:8000
+
+  scheduler:
+    build: .
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    command: python manage.py run_scheduler
+    depends_on:
+      - web
+
+volumes:
+  db_data:
