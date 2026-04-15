@@ -36,22 +36,6 @@
                         <input type="checkbox" id="linkedin" name="websites" value="linkedin" checked>
                         <label for="linkedin">LinkedIn Jobs</label>
                     </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="glassdoor" name="websites" value="glassdoor">
-                        <label for="glassdoor">Glassdoor</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="monster" name="websites" value="monster">
-                        <label for="monster">Monster</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="careerbuilder" name="websites" value="careerbuilder">
-                        <label for="careerbuilder">CareerBuilder</label>
-                    </div>
-                    <div class="checkbox-item">
-                        <input type="checkbox" id="ziprecruiter" name="websites" value="ziprecruiter">
-                        <label for="ziprecruiter">ZipRecruiter</label>
-                    </div>
                     {% for website in custom_websites %}
                     <div class="checkbox-item">
                         <input type="checkbox" id="{{ website.name|lower }}" name="websites" value="{{ website.name }}">
@@ -151,11 +135,6 @@
                 
                 // Disable form to prevent multiple submissions
                 form.classList.add('form-disabled');
-                
-                // Optional: Add a small delay to ensure the overlay shows
-                setTimeout(function() {
-                    form.submit();
-                }, 100);
             });
         });
     </script>

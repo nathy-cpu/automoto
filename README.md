@@ -1,276 +1,76 @@
-# AutoMoto Job Scraper
+# AutoMoto Job Search Interface
 
-A powerful Django web application for scraping job listings from multiple websites with advanced filtering capabilities, including EasyApply detection for LinkedIn jobs.
+Django app for searching jobs across supported job sites and user-defined custom job boards.
 
-## 🚀 Features
+## Current Scope
 
-- **Multi-Site Job Scraping**: Scrape jobs from Indeed, LinkedIn, Glassdoor, Monster, CareerBuilder, and ZipRecruiter
-- **EasyApply Filtering**: Automatically filter out LinkedIn jobs that use EasyApply for better quality opportunities
-- **Custom Website Support**: Add and manage custom job websites with CSS selectors
-- **Advanced Job Details**: Extract comprehensive job information including direct application links
-- **Modern UI**: Beautiful, responsive web interface with loading animations
-- **Pagination**: Navigate through large result sets efficiently
-- **Admin Panel**: Manage custom websites and application settings
+- Built-in sources: `Indeed`, `LinkedIn`
+- Custom sources: user-managed websites using CSS selectors
+- Server-rendered UI with session-backed results and pagination
 
-## 📋 Prerequisites
+## Quick Start
 
-- Python 3.8 or higher
-- Git
-- Internet connection for scraping
+### 1. Create and activate a virtual environment
 
-## 🛠️ Quick Setup
-
-### Linux
 ```bash
-# Make the script executable
-chmod +x setup_linux.sh
-
-# Run the setup script
-./setup_linux.sh
-
-# Test the setup
-python test_app.py
-
-# Run the application
-./run.sh
+python3 -m venv venv
+source venv/bin/activate
 ```
 
-### Windows
-```cmd
-# Run the setup script
-setup_windows.bat
+### 2. Install dependencies
 
-# Test the setup
-test_app.bat
-
-# Run the application
-run.bat
-```
-
-### macOS
-```bash
-# Make the script executable
-chmod +x setup_macos.sh
-
-# Run the setup script
-./setup_macos.sh
-
-# Test the setup
-python test_app.py
-
-# Run the application
-./run.sh
-```
-
-## 🌐 Access the Application
-
-After running the setup script:
-
-1. **Main Application**: http://localhost:8000
-2. **Admin Panel**: http://localhost:8000/admin
-   - Username: `admin`
-   - Password: `admin123`
-
-## 🔧 Manual Setup (Alternative)
-
-If you prefer to set up manually:
-
-### 1. Clone the Repository
-```bash
-git clone <repository-url>
-cd automoto
-```
-
-### 2. Create Virtual Environment
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-### 3. Install Dependencies
-
-**For development (recommended):**
-```bash
-pip install -r requirements-dev.txt
-```
-
-**For runtime only:**
 ```bash
 pip install -r requirements.txt
 ```
 
-**For production:**
-```bash
-pip install -r requirements-prod.txt
-```
+Optional:
 
-### 4. Configure Environment
-Create a `.env` file:
+- Development tools: `pip install -r requirements-dev.txt`
+- Production extras: `pip install -r requirements-prod.txt`
+
+### 3. Configure environment
+
+Create `.env` (or update existing):
+
 ```env
 DEBUG=True
-SECRET_KEY=your-secret-key-here
+SECRET_KEY=replace-this
 ALLOWED_HOSTS=localhost,127.0.0.1
-DATABASE_URL=sqlite:///db.sqlite3
-SCRAPING_DELAY=2
-MAX_PAGES_PER_SITE=5
-REQUEST_TIMEOUT=30
-LOG_LEVEL=INFO
 ```
 
-### 5. Run Migrations
+### 4. Run database migrations
+
 ```bash
-python manage.py makemigrations
-python manage.py migrate
+venv/bin/python manage.py migrate
 ```
 
-### 6. Create Superuser
+### 5. Start the app
+
 ```bash
-python manage.py createsuperuser
+./run.sh
 ```
 
-### 7. Run the Application
+Or:
+
 ```bash
-python manage.py runserver
+venv/bin/python manage.py runserver 0.0.0.0:8000
 ```
 
-## 📊 Supported Job Sites
+## URLs
 
-### Built-in Sites
-- **Indeed**: Comprehensive job listings with detailed information
-- **LinkedIn**: Professional networking jobs (with EasyApply filtering)
-- **Glassdoor**: Company reviews and job listings
-- **Monster**: Traditional job board
-- **CareerBuilder**: Large job database
-- **ZipRecruiter**: AI-powered job matching
+- App: `http://localhost:8000`
+- Admin: `http://localhost:8000/admin`
 
-### Custom Sites
-Add your own job websites with CSS selectors for:
-- Job title extraction
-- Company name extraction
-- Location extraction
-- Salary information
-- Posted date
-- Job description
-- Application links
+## Testing
 
-## 🎯 EasyApply Filtering
+Run deterministic test suite:
 
-The application automatically filters out LinkedIn jobs that use EasyApply, focusing on jobs that require traditional application processes. This helps find:
-
-- **Better Quality Jobs**: Traditional applications often indicate more serious opportunities
-- **More Detailed Information**: Better job descriptions and requirements
-- **Direct Application Links**: Direct links to company application systems
-- **Reduced Noise**: Eliminates low-effort job postings
-
-### Filtered Indicators
-- `easy apply`, `easyapply`
-- `quick apply`, `one-click apply`
-- `apply with linkedin`, `apply with profile`
-- And 10+ other variations
-
-## 🏗️ Production Deployment
-
-### Linux (systemd)
 ```bash
-./setup_production.sh
-sudo systemctl start automoto
-sudo systemctl enable automoto
+venv/bin/python manage.py test
 ```
 
-### macOS (launchd)
-```bash
-./setup_production.sh
-launchctl load ~/Library/LaunchAgents/com.automoto.jobscraper.plist
-```
+## Notes
 
-### Windows
-Consider using IIS or Apache with mod_wsgi for production deployment.
-
-## 🔍 Testing
-
-### Run All Django Tests
-```bash
-# Run all tests
-python manage.py test
-
-# Run with verbose output
-python manage.py test --verbosity=2
-
-# Run specific test classes
-python manage.py test job_scraper.tests.SetupTestCase
-python manage.py test job_scraper.tests.ModelTestCase
-python manage.py test job_scraper.tests.ScrapingTestCase
-```
-
-### Test Coverage
-```bash
-# Install coverage
-pip install coverage
-
-# Run tests with coverage
-coverage run --source='.' manage.py test
-
-# Generate coverage report
-coverage report
-
-# Generate HTML coverage report
-coverage html
-```
-
-### Test Categories
-- **Setup Tests**: Django configuration, imports, and basic setup
-- **Model Tests**: Database models, relationships, and data validation
-- **Scraping Tests**: Job scraping functionality and error handling
-- **Integration Tests**: Complete workflow testing
-
-## 🎨 Code Formatting
-
-The project uses several tools to ensure PEP8 compliance and consistent code formatting:
-
-### Install Development Dependencies
-```bash
-pip install -r requirements-dev.txt
-```
-
-### Format Code with Black
-```bash
-# Format all Python files
-black .
-
-# Check formatting without making changes
-black . --check
-```
-
-### Sort Imports with isort
-```bash
-# Sort imports in all Python files
-isort .
-
-# Check import sorting without making changes
-isort . --check-only
-```
-
-### Fix PEP8 Issues with autopep8
-```bash
-# Fix PEP8 issues in all Python files
-autopep8 --in-place --recursive .
-
-# Show what would be changed without making changes
-autopep8 --diff --recursive .
-```
-
-### Complete Formatting Workflow
-```bash
-# 1. Sort imports
-isort .
-
-# 2. Format with Black
-black .
-
-# 3. Fix PEP8 issues
-autopep8 --in-place --recursive .
-```
-
-## 📁 Project Structure
-
-```
+- Scraping behavior depends on external site markup and availability.
+- Custom website scraping is configured from the app UI at `/websites/`.
+- This repository intentionally avoids OS-specific bootstrap scripts and uses one manual setup flow.

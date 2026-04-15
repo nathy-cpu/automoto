@@ -2,20 +2,35 @@ import logging
 import random
 import re
 import time
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+from .models import CustomWebsite
+
 logger = logging.getLogger(__name__)
 
+EASY_APPLY_INDICATORS = [
+    "easy apply",
+    "easyapply",
+    "quick apply",
+    "apply with linkedin",
+    "apply with profile",
+    "apply with your linkedin profile",
+    "one-click apply",
+    "apply with one click",
+    "apply with your profile",
+    "apply with your resume",
+    "apply with your linkedin",
+    "apply with linkedin profile",
+    "apply with linkedin resume",
+]
 
-class JobScraper:
-    """Base class for job scrapers"""
+
+class EnhancedJobScraper:
+    """Enhanced scraper that can handle multiple websites and extract detailed job information"""
 
     def __init__(self):
         self.session = requests.Session()
@@ -26,75 +41,53 @@ class JobScraper:
         )
 
     def get_recent_jobs(
-        self, country: str, keywords: Optional[str] = None, max_pages: int = 5
+        self,
+        websites: List[str],
+        country: str,
+        keywords: Optional[str] = None,
+        max_pages: int = 10,
     ) -> List[Dict]:
-        """Get recent job postings from the last 24 hours"""
-        raise NotImplementedError
+        """Get recent job postings from multiple websites"""
+        all_jobs = []
 
-    def parse_job_details(self, job_url: str) -> Dict:
-        """Parse detailed job information from a job posting page"""
-        raise NotImplementedError
+        for website in websites:
+            normalized_website = website.strip().lower()
+            try:
+                if normalized_website == "indeed":
+                    jobs = self._scrape_indeed(country, keywords, max_pages)
+                elif normalized_website == "linkedin":
+                    jobs = self._scrape_linkedin(country, keywords, max_pages)
+                else:
+                    # Try custom website
+                    jobs = self._scrape_custom_website(
+                        website, country, keywords, max_pages
+                    )
 
-    def _clean_text(self, text: str) -> str:
-        """Clean and normalize text"""
-        if not text:
-            return ""
-        return re.sub(r"\s+", " ", text.strip())
+                all_jobs.extend(jobs)
+                logger.info(f"Scraped {len(jobs)} jobs from {website}")
 
-    def _extract_salary(self, text: str) -> str:
-        """Extract salary information from text"""
-        salary_patterns = [
-            r"\$[\d,]+(?:-\$[\d,]+)?\s*(?:per\s+year|annually|yearly)",
-            r"[\d,]+(?:-\d+)?\s*(?:USD|EUR|GBP)\s*(?:per\s+year|annually)",
-            r"\$[\d,]+(?:-\$[\d,]+)?\s*(?:per\s+hour|hourly)",
-        ]
+            except Exception as e:
+                logger.error(f"Error scraping {website}: {e}")
+                continue
 
-        for pattern in salary_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                return match.group()
-        return ""
+        return all_jobs
 
-    def _extract_date(self, text: str) -> Optional[str]:
-        """Extract and parse date information"""
-        date_patterns = [
-            r"(\d{1,2})\s+(?:days?|hours?)\s+ago",
-            r"(\d{1,2})\s+(?:minutes?|mins?)\s+ago",
-            r"posted\s+(\d{1,2})\s+(?:days?|hours?)\s+ago",
-            r"(\d{1,2}/\d{1,2}/\d{4})",
-            r"(\d{1,2}-\d{1,2}-\d{4})",
-        ]
-
-        for pattern in date_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                return match.group()
-        return None
-
-
-class IndeedScraper(JobScraper):
-    """Scraper for Indeed.com"""
-
-    def get_recent_jobs(
-        self, country: str, keywords: Optional[str] = None, max_pages: int = 5
+    def _scrape_indeed(
+        self, country: str, keywords: Optional[str], max_pages: int
     ) -> List[Dict]:
+        """Enhanced Indeed scraper with better detail extraction"""
         jobs = []
-
-        # Country-specific Indeed URLs
         country_urls = {
             "us": "https://www.indeed.com",
             "uk": "https://uk.indeed.com",
             "ca": "https://ca.indeed.com",
             "au": "https://au.indeed.com",
-            "de": "https://de.indeed.com",
-            "fr": "https://fr.indeed.com",
         }
 
         base_url = country_urls.get(country.lower(), "https://www.indeed.com")
 
         for page in range(max_pages):
             try:
-                # Build search URL
                 search_params = {
                     "l": country,
                     "fromage": "1",  # Last 24 hours
@@ -105,7 +98,7 @@ class IndeedScraper(JobScraper):
                     search_params["q"] = keywords
 
                 url = f"{base_url}/jobs"
-                response = self.session.get(url, params=search_params)
+                response = self.session.get(url, params=search_params, timeout=30)
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.content, "html.parser")
@@ -118,12 +111,17 @@ class IndeedScraper(JobScraper):
                     try:
                         job_data = self._parse_indeed_card(card, base_url)
                         if job_data:
+                            # Get detailed job information
+                            detailed_job = self._get_indeed_job_details(
+                                job_data["job_url"]
+                            )
+                            job_data.update(detailed_job)
                             jobs.append(job_data)
                     except Exception as e:
                         logger.error(f"Error parsing Indeed job card: {e}")
                         continue
 
-                time.sleep(random.uniform(1, 3))  # Be respectful
+                time.sleep(random.uniform(1, 3))
 
             except Exception as e:
                 logger.error(f"Error scraping Indeed page {page}: {e}")
@@ -132,7 +130,7 @@ class IndeedScraper(JobScraper):
         return jobs
 
     def _parse_indeed_card(self, card, base_url: str) -> Optional[Dict]:
-        """Parse individual job card from Indeed"""
+        """Parse individual job card from Indeed with enhanced data extraction"""
         try:
             job_id = card.get("data-jk")
             if not job_id:
@@ -150,7 +148,7 @@ class IndeedScraper(JobScraper):
                 self._clean_text(location_elem.get_text()) if location_elem else ""
             )
 
-            # Extract salary if available
+            # Extract salary
             salary_elem = card.find("div", class_="salary-snippet")
             salary = self._clean_text(salary_elem.get_text()) if salary_elem else ""
 
@@ -177,8 +175,8 @@ class IndeedScraper(JobScraper):
             logger.error(f"Error parsing Indeed card: {e}")
             return None
 
-    def parse_job_details(self, job_url: str) -> Dict:
-        """Parse detailed job information from Indeed job page"""
+    def _get_indeed_job_details(self, job_url: str) -> Dict:
+        """Get detailed job information from Indeed job page"""
         try:
             response = self.session.get(job_url)
             response.raise_for_status()
@@ -196,39 +194,46 @@ class IndeedScraper(JobScraper):
             # Extract requirements
             requirements = self._extract_requirements(description)
 
-            # Extract application instructions
+            # Extract application instructions and link
             apply_elem = soup.find("div", class_="jobsearch-ApplyButton")
             application_instructions = (
                 self._clean_text(apply_elem.get_text()) if apply_elem else ""
             )
 
-            # Extract application link
+            # Look for direct apply link
             apply_link_elem = soup.find("a", class_="jobsearch-ApplyButton")
-            application_link = apply_link_elem.get("href") if apply_link_elem else ""
-            if application_link and not application_link.startswith("http"):
-                application_link = urljoin(job_url, application_link)
+            application_link = ""
+            if apply_link_elem:
+                application_link = apply_link_elem.get("href")
+                if application_link and not application_link.startswith("http"):
+                    application_link = urljoin(job_url, application_link)
+
+            # Extract job type and experience level
+            job_type = self._extract_job_type(description)
+            experience_level = self._extract_experience_level(description)
+
+            # Extract industry
+            industry = self._extract_industry(description)
 
             return {
                 "description": description,
                 "requirements": requirements,
                 "application_instructions": application_instructions,
                 "application_link": application_link,
+                "job_type": job_type,
+                "experience_level": experience_level,
+                "industry": industry,
             }
 
         except Exception as e:
-            logger.error(f"Error parsing Indeed job details: {e}")
+            logger.error(f"Error getting Indeed job details: {e}")
             return {}
 
-
-class LinkedInScraper(JobScraper):
-    """Scraper for LinkedIn Jobs"""
-
-    def get_recent_jobs(
-        self, country: str, keywords: Optional[str] = None, max_pages: int = 5
+    def _scrape_linkedin(
+        self, country: str, keywords: Optional[str], max_pages: int
     ) -> List[Dict]:
+        """Enhanced LinkedIn scraper"""
         jobs = []
-
-        # LinkedIn Jobs URL
         base_url = "https://www.linkedin.com/jobs/search"
 
         for page in range(max_pages):
@@ -242,7 +247,7 @@ class LinkedInScraper(JobScraper):
                 if keywords:
                     search_params["keywords"] = keywords
 
-                response = self.session.get(base_url, params=search_params)
+                response = self.session.get(base_url, params=search_params, timeout=30)
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.content, "html.parser")
@@ -255,6 +260,19 @@ class LinkedInScraper(JobScraper):
                     try:
                         job_data = self._parse_linkedin_card(card)
                         if job_data:
+                            # Get detailed job information
+                            detailed_job = self._get_linkedin_job_details(
+                                job_data["job_url"]
+                            )
+
+                            # Skip jobs that are filtered out (EasyApply jobs)
+                            if detailed_job.get("filtered_out"):
+                                logger.info(
+                                    f"Skipping LinkedIn job: {detailed_job.get('reason', 'Unknown reason')}"
+                                )
+                                continue
+
+                            job_data.update(detailed_job)
                             jobs.append(job_data)
                     except Exception as e:
                         logger.error(f"Error parsing LinkedIn job card: {e}")
@@ -269,9 +287,8 @@ class LinkedInScraper(JobScraper):
         return jobs
 
     def _parse_linkedin_card(self, card) -> Optional[Dict]:
-        """Parse individual job card from LinkedIn"""
+        """Parse LinkedIn job card with enhanced data extraction"""
         try:
-            # Extract job ID
             job_link_elem = card.find("a", class_="base-card__full-link")
             if not job_link_elem:
                 return None
@@ -279,7 +296,6 @@ class LinkedInScraper(JobScraper):
             job_url = job_link_elem.get("href")
             job_id = job_url.split("/")[-1] if job_url else None
 
-            # Extract basic info
             title_elem = card.find("h3", class_="base-search-card__title")
             title = self._clean_text(title_elem.get_text()) if title_elem else ""
 
@@ -291,9 +307,17 @@ class LinkedInScraper(JobScraper):
                 self._clean_text(location_elem.get_text()) if location_elem else ""
             )
 
-            # Extract posted date
             date_elem = card.find("time")
             posted_date = self._clean_text(date_elem.get_text()) if date_elem else ""
+
+            # Check for EasyApply indicators in the job card itself
+            card_text = card.get_text().lower()
+            for indicator in EASY_APPLY_INDICATORS:
+                if indicator in card_text:
+                    logger.info(
+                        f"Filtering out LinkedIn job card with EasyApply indicator: {indicator}"
+                    )
+                    return None
 
             return {
                 "id": job_id,
@@ -310,160 +334,278 @@ class LinkedInScraper(JobScraper):
             logger.error(f"Error parsing LinkedIn card: {e}")
             return None
 
+    def _get_linkedin_job_details(self, job_url: str) -> Dict:
+        """Get detailed job information from LinkedIn job page"""
+        try:
+            response = self.session.get(job_url, timeout=30)
+            response.raise_for_status()
 
-class GlassdoorScraper(JobScraper):
-    """Scraper for Glassdoor"""
+            soup = BeautifulSoup(response.content, "html.parser")
 
-    def get_recent_jobs(
-        self, country: str, keywords: Optional[str] = None, max_pages: int = 5
+            # Check for EasyApply - filter out these jobs
+            # Check in the page content for EasyApply indicators
+            page_text = soup.get_text().lower()
+            for indicator in EASY_APPLY_INDICATORS:
+                if indicator in page_text:
+                    logger.info(f"Filtering out LinkedIn job with EasyApply: {job_url}")
+                    return {"filtered_out": True, "reason": "EasyApply detected"}
+
+            # Check for EasyApply button specifically
+            easy_apply_button = soup.find(
+                "button", string=re.compile(r"easy\s*apply", re.IGNORECASE)
+            )
+            if easy_apply_button:
+                logger.info(
+                    f"Filtering out LinkedIn job with EasyApply button: {job_url}"
+                )
+                return {"filtered_out": True, "reason": "EasyApply button detected"}
+
+            # Check for apply button text that indicates EasyApply
+            apply_button = soup.find("a", class_="apply-button")
+            if apply_button:
+                button_text = apply_button.get_text().lower()
+                for indicator in EASY_APPLY_INDICATORS:
+                    if indicator in button_text:
+                        logger.info(
+                            f"Filtering out LinkedIn job with EasyApply in button text: {job_url}"
+                        )
+                        return {
+                            "filtered_out": True,
+                            "reason": "EasyApply in button text",
+                        }
+
+            # Extract description
+            description_elem = soup.find("div", class_="show-more-less-html")
+            description = (
+                self._clean_text(description_elem.get_text())
+                if description_elem
+                else ""
+            )
+
+            # Extract requirements
+            requirements = self._extract_requirements(description)
+
+            # Look for apply button
+            application_link = ""
+            if apply_button:
+                application_link = apply_button.get("href")
+                if application_link and not application_link.startswith("http"):
+                    application_link = urljoin(job_url, application_link)
+
+            return {
+                "description": description,
+                "requirements": requirements,
+                "application_link": application_link,
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting LinkedIn job details: {e}")
+            return {}
+
+    def _scrape_custom_website(
+        self, website_name: str, country: str, keywords: Optional[str], max_pages: int
     ) -> List[Dict]:
-        jobs = []
+        """Scrape custom website using stored selectors"""
+        custom_website = CustomWebsite.objects.filter(
+            name__iexact=website_name, is_active=True
+        ).first()
+        if not custom_website:
+            logger.error(f"Custom website '{website_name}' not found")
+            return []
 
-        base_url = "https://www.glassdoor.com/Job"
+        jobs = []
 
         for page in range(max_pages):
             try:
-                search_params = {
-                    "loc": country,
-                    "fromage": "1",  # Last 24 hours
-                    "p": page + 1,
-                }
+                # Build search URL
+                search_url = custom_website.search_url
+                if "{keywords}" in search_url and keywords:
+                    search_url = search_url.replace("{keywords}", keywords)
+                if "{location}" in search_url:
+                    search_url = search_url.replace("{location}", country)
+                if "{page}" in search_url:
+                    search_url = search_url.replace("{page}", str(page + 1))
 
-                if keywords:
-                    search_params["sc.keyword"] = keywords
-
-                response = self.session.get(base_url, params=search_params)
+                response = self.session.get(search_url, timeout=30)
                 response.raise_for_status()
 
                 soup = BeautifulSoup(response.content, "html.parser")
-                job_cards = soup.find_all("li", class_="react-job-listing")
+                job_cards = soup.select(custom_website.job_list_selector)
 
                 if not job_cards:
                     break
 
-                for card in job_cards:
+                for card_number, card in enumerate(job_cards, start=1):
                     try:
-                        job_data = self._parse_glassdoor_card(card)
+                        job_data = self._parse_custom_card(
+                            card,
+                            custom_website,
+                            page_number=page + 1,
+                            card_number=card_number,
+                        )
                         if job_data:
                             jobs.append(job_data)
                     except Exception as e:
-                        logger.error(f"Error parsing Glassdoor job card: {e}")
+                        logger.error(f"Error parsing custom job card: {e}")
                         continue
 
                 time.sleep(random.uniform(1, 3))
 
             except Exception as e:
-                logger.error(f"Error scraping Glassdoor page {page}: {e}")
+                logger.error(f"Error scraping custom website page {page}: {e}")
                 break
 
         return jobs
 
-    def _parse_glassdoor_card(self, card) -> Optional[Dict]:
-        """Parse individual job card from Glassdoor"""
+    def _parse_custom_card(
+        self,
+        card,
+        custom_website: CustomWebsite,
+        page_number: int,
+        card_number: int,
+    ) -> Optional[Dict]:
+        """Parse job card using custom selectors"""
         try:
-            # Extract job ID and URL
-            job_link_elem = card.find("a", class_="jobLink")
-            if not job_link_elem:
-                return None
-
-            job_url = job_link_elem.get("href")
-            job_id = job_url.split("/")[-1] if job_url else None
-
-            # Extract basic info
-            title_elem = card.find("a", class_="jobLink")
+            # Extract basic information using custom selectors
+            title_elem = card.select_one(custom_website.title_selector)
             title = self._clean_text(title_elem.get_text()) if title_elem else ""
 
-            company_elem = card.find("a", class_="employer-name")
+            company_elem = card.select_one(custom_website.company_selector)
             company = self._clean_text(company_elem.get_text()) if company_elem else ""
 
-            location_elem = card.find("span", class_="location")
+            location_elem = card.select_one(custom_website.location_selector)
             location = (
                 self._clean_text(location_elem.get_text()) if location_elem else ""
             )
 
-            # Extract salary
-            salary_elem = card.find("span", class_="salary-estimate")
-            salary = self._clean_text(salary_elem.get_text()) if salary_elem else ""
+            # Extract job link
+            job_link_elem = card.select_one(custom_website.job_link_selector)
+            job_url = ""
+            if job_link_elem:
+                job_url = job_link_elem.get("href")
+                if job_url and not job_url.startswith("http"):
+                    job_url = urljoin(custom_website.base_url, job_url)
+
+            # Extract additional information if selectors are provided
+            salary = ""
+            if custom_website.salary_selector:
+                salary_elem = card.select_one(custom_website.salary_selector)
+                salary = self._clean_text(salary_elem.get_text()) if salary_elem else ""
+
+            posted_date = ""
+            if custom_website.date_selector:
+                date_elem = card.select_one(custom_website.date_selector)
+                posted_date = (
+                    self._clean_text(date_elem.get_text()) if date_elem else ""
+                )
 
             return {
-                "id": job_id,
+                "id": f"custom-{custom_website.pk}-{page_number}-{card_number}",
                 "title": title,
                 "company": company,
                 "location": location,
                 "salary": salary,
-                "source_website": "Glassdoor",
+                "posted_date": posted_date,
+                "source_website": custom_website.name,
                 "source_url": job_url,
                 "job_url": job_url,
             }
 
         except Exception as e:
-            logger.error(f"Error parsing Glassdoor card: {e}")
+            logger.error(f"Error parsing custom card: {e}")
             return None
 
+    def _extract_requirements(self, description: str) -> str:
+        """Extract requirements from job description"""
+        requirements_keywords = [
+            "requirements",
+            "qualifications",
+            "skills",
+            "experience",
+            "must have",
+            "should have",
+            "preferred",
+            "minimum",
+        ]
 
-def get_scraper(website: str) -> JobScraper:
-    """Factory function to get the appropriate scraper"""
-    scrapers = {
-        "indeed": IndeedScraper,
-        "linkedin": LinkedInScraper,
-        "glassdoor": GlassdoorScraper,
-    }
+        lines = description.split("\n")
+        requirements_lines = []
+        in_requirements = False
 
-    scraper_class = scrapers.get(website.lower())
-    if not scraper_class:
-        raise ValueError(f"Unsupported website: {website}")
+        for line in lines:
+            line_lower = line.lower()
 
-    return scraper_class()
+            if any(keyword in line_lower for keyword in requirements_keywords):
+                in_requirements = True
 
+            if in_requirements and line.strip():
+                if line.strip().startswith(("•", "-", "*", "·")):
+                    requirements_lines.append(line.strip())
+                elif re.match(r"^\d+\.", line.strip()):
+                    requirements_lines.append(line.strip())
 
-def scrape_jobs(
-    websites: List[str], country: str, keywords: Optional[str] = None
-) -> List[Dict]:
-    """Main function to scrape jobs from multiple websites"""
-    all_jobs = []
+        return "\n".join(requirements_lines) if requirements_lines else ""
 
-    for website in websites:
-        try:
-            scraper = get_scraper(website)
-            jobs = scraper.get_recent_jobs(country, keywords)
-            all_jobs.extend(jobs)
-            logger.info(f"Scraped {len(jobs)} jobs from {website}")
-        except Exception as e:
-            logger.error(f"Error scraping {website}: {e}")
-            continue
+    def _extract_job_type(self, description: str) -> str:
+        """Extract job type from description"""
+        job_types = [
+            "full-time",
+            "part-time",
+            "contract",
+            "temporary",
+            "internship",
+            "freelance",
+        ]
+        description_lower = description.lower()
 
-    return all_jobs
+        for job_type in job_types:
+            if job_type in description_lower:
+                return job_type.title()
 
+        return "Full-time"  # Default
 
-def _extract_requirements(description: str) -> str:
-    """Extract requirements from job description"""
-    requirements_keywords = [
-        "requirements",
-        "qualifications",
-        "skills",
-        "experience",
-        "must have",
-        "should have",
-        "preferred",
-        "minimum",
-    ]
+    def _extract_experience_level(self, description: str) -> str:
+        """Extract experience level from description"""
+        levels = {
+            "entry-level": ["entry level", "junior", "0-2 years", "1-2 years"],
+            "mid-level": ["mid level", "intermediate", "3-5 years", "2-5 years"],
+            "senior": ["senior", "lead", "5+ years", "7+ years", "experienced"],
+            "executive": ["executive", "director", "manager", "head of"],
+        }
 
-    lines = description.split("\n")
-    requirements_lines = []
-    in_requirements = False
+        description_lower = description.lower()
 
-    for line in lines:
-        line_lower = line.lower()
+        for level, keywords in levels.items():
+            if any(keyword in description_lower for keyword in keywords):
+                return level.title()
 
-        # Check if we're entering requirements section
-        if any(keyword in line_lower for keyword in requirements_keywords):
-            in_requirements = True
+        return "Mid-level"  # Default
 
-        # Add lines that look like requirements
-        if in_requirements and line.strip():
-            if line.strip().startswith(("•", "-", "*", "·")):
-                requirements_lines.append(line.strip())
-            elif re.match(r"^\d+\.", line.strip()):
-                requirements_lines.append(line.strip())
+    def _extract_industry(self, description: str) -> str:
+        """Extract industry from description"""
+        industries = [
+            "technology",
+            "healthcare",
+            "finance",
+            "education",
+            "retail",
+            "manufacturing",
+            "consulting",
+            "marketing",
+            "sales",
+            "engineering",
+        ]
 
-    return "\n".join(requirements_lines) if requirements_lines else ""
+        description_lower = description.lower()
+
+        for industry in industries:
+            if industry in description_lower:
+                return industry.title()
+
+        return "Technology"  # Default
+
+    def _clean_text(self, text: str) -> str:
+        """Clean and normalize text"""
+        if not text:
+            return ""
+        return re.sub(r"\s+", " ", text.strip())

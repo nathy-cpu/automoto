@@ -4,6 +4,10 @@
 # Include runtime dependencies
 -r requirements.txt
 
+# Testing dependencies
+pytest==7.4.3
+pytest-django==4.7.0
+
 # Code quality and formatting tools
 black==24.1.1
 autopep8==2.3.2

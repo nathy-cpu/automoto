@@ -49,6 +49,7 @@ cache/
 *.swp
 *.swo
 *~
+*.codex
 
 # OS generated files
 .DS_Store

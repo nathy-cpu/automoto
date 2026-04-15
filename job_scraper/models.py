@@ -23,7 +23,7 @@ class Job(models.Model):
     application_link = models.URLField(blank=True)
     source_website = models.CharField(
         max_length=100
-    )  # indeed, linkedin, glassdoor, etc.
+    )  # indeed, linkedin, custom website, etc.
     source_url = models.URLField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
