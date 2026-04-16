@@ -81,6 +81,8 @@ class JobScraper:
     ) -> List[Job]:
         """Scrape custom website using stored selectors (Requests version)"""
         jobs = []
+        error_msg = ""
+        html_content = ""
 
         for page in range(max_pages):
             try:
@@ -94,12 +96,19 @@ class JobScraper:
                     search_url = search_url.replace("{page}", str(page + 1))
 
                 response = self.session.get(search_url, timeout=30)
-                response.raise_for_status()
+                try:
+                    response.raise_for_status()
+                except Exception as e:
+                    error_msg = f"HTTP Error: {e}"
+                    html_content = response.text if hasattr(response, "text") else ""
+                    break
 
                 soup = BeautifulSoup(response.content, "html.parser")
                 job_cards = soup.select(website.job_list_selector)
 
                 if not job_cards:
+                    error_msg = f"No job cards found matching selector: {website.job_list_selector}"
+                    html_content = response.text
                     break
 
                 for card_number, card in enumerate(job_cards, start=1):
@@ -150,10 +159,24 @@ class JobScraper:
 
             except Exception as e:
                 logger.error(f"Error scraping {website.name} page {page}: {e}")
+                error_msg = str(e)
                 break
 
-        return jobs
+        from .models import ScraperExecutionLog
+        from django.core.files.base import ContentFile
+        from datetime import datetime
 
+        log = ScraperExecutionLog.objects.create(
+            website=website,
+            scraper_type='requests',
+            jobs_found=len(jobs),
+            error_message=error_msg,
+        )
+        if html_content:
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log.html_dump.save(f"{website.name}_error_{timestamp_str}.html", ContentFile(html_content.encode('utf-8')), save=True)
+
+        return jobs
     def _get_custom_details(self, job_url: str, website: CustomWebsite) -> Dict:
         """Fetch job detail page using custom selectors"""
         try:

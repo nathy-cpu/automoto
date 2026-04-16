@@ -35,34 +35,33 @@ class StealthScraper:
             Stealth().apply_stealth_sync(page)
 
             all_new_jobs = []
+            error_msg = ""
+            screenshot_bytes = None
+            html_content = ""
 
-            for page_num in range(max_pages):
-                # Build search URL from template
-                search_url = website.search_url
-                if "{keywords}" in search_url:
-                    search_url = search_url.replace("{keywords}", keywords)
-                if "{location}" in search_url:
-                    search_url = search_url.replace("{location}", location)
-                if "{page}" in search_url:
-                    search_url = search_url.replace("{page}", str(page_num + 1))
-
-                logger.info(f"Navigating to {search_url} (Page {page_num+1})")
-
+            for page_num in range(1, max_pages + 1):
+                url = website.search_url.format(
+                    keywords=keywords, location=location, page=page_num
+                )
                 try:
-                    page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-                    time.sleep(random.uniform(4, 8))
+                    logger.info(f"Navigating to {url}")
+                    page.goto(url, wait_until="domcontentloaded", timeout=45000)
 
-                    # Scroll to trigger lazy loading
-                    page.evaluate("window.scrollTo(0, 800)")
-                    time.sleep(1)
+                    time.sleep(random.uniform(2, 5))
 
-                    # Wait for results or timeout
                     try:
                         page.wait_for_selector(website.job_list_selector, timeout=20000)
-                    except Exception:
+                    except Exception as e:
                         logger.warning(
                             f"Timeout waiting for {website.job_list_selector}"
                         )
+                        error_msg = f"Timeout waiting for primary selector. Possible CAPTCHA wall."
+                        try:
+                            html_content = page.content()
+                            screenshot_bytes = page.screenshot()
+                        except:
+                            pass
+                        break
 
                     # Check for CAPTCHA
                     content_lower = page.content().lower()
@@ -71,6 +70,12 @@ class StealthScraper:
                         for x in ["recaptcha", "hcaptcha", "cloudflare"]
                     ):
                         logger.error(f"Anti-bot detected on {website.name}")
+                        error_msg = "Anti-bot (Cloudflare/CAPTCHA) detected."
+                        try:
+                            html_content = page.content()
+                            screenshot_bytes = page.screenshot()
+                        except:
+                            pass
                         break
 
                     job_elements = page.query_selector_all(website.job_list_selector)
@@ -140,9 +145,9 @@ class StealthScraper:
 
                             continent = get_continent_from_country(country)
 
-                            job, created = Job.objects.update_or_create(
-                                source_url=job_url,
-                                defaults={
+                            all_new_jobs.append({
+                                "source_url": job_url,
+                                "defaults": {
                                     "title": title.strip(),
                                     "company": company.strip(),
                                     "location": loc_text.strip(),
@@ -152,10 +157,8 @@ class StealthScraper:
                                     "source_website": website.name,
                                     "is_rfp": "contract" in keywords.lower()
                                     or "rfp" in keywords.lower(),
-                                },
-                            )
-                            if created:
-                                all_new_jobs.append(job)
+                                }
+                            })
 
                         except Exception as e:
                             logger.error(f"Error parsing card on {website.name}: {e}")
@@ -164,8 +167,34 @@ class StealthScraper:
                     logger.error(f"Page navigation failed for {website.name}: {e}")
                     break
 
-            browser.close()
-            return all_new_jobs
+        from .models import Job, ScraperExecutionLog
+        from django.core.files.base import ContentFile
+        from datetime import datetime
+
+        # Save jobs outside event loop to avoid SynchronousOnlyOperation
+        saved_jobs = []
+        for job_data in all_new_jobs:
+            job, created = Job.objects.update_or_create(
+                source_url=job_data["source_url"],
+                defaults=job_data["defaults"],
+            )
+            if created:
+                saved_jobs.append(job)
+
+        log = ScraperExecutionLog.objects.create(
+            website=website,
+            scraper_type='playwright',
+            jobs_found=len(saved_jobs),
+            error_message=error_msg,
+        )
+        
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if screenshot_bytes:
+            log.screenshot.save(f"{website.name}_error_{timestamp_str}.png", ContentFile(screenshot_bytes), save=True)
+        if html_content:
+            log.html_dump.save(f"{website.name}_error_{timestamp_str}.html", ContentFile(html_content.encode('utf-8')), save=True)
+
+        return saved_jobs
 
     def scrape_indeed(self, keywords, location, max_pages=1):
         """Deprecated: Use generic scrape() instead"""

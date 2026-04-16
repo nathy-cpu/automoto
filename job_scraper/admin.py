@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Job, CustomWebsite, Contact
+from .models import Job, CustomWebsite, Contact, ScraperExecutionLog
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
@@ -23,3 +23,14 @@ class ContactAdmin(admin.ModelAdmin):
     def company_name(self, obj):
         return obj.job.company
     company_name.short_description = 'Company'
+
+@admin.register(ScraperExecutionLog)
+class ScraperExecutionLogAdmin(admin.ModelAdmin):
+    list_display = ('website', 'scraper_type', 'timestamp', 'jobs_found', 'has_error')
+    list_filter = ('website', 'scraper_type', 'timestamp')
+    readonly_fields = ('website', 'scraper_type', 'timestamp', 'jobs_found', 'error_message', 'screenshot', 'html_dump')
+    
+    def has_error(self, obj):
+        return bool(obj.error_message)
+    has_error.boolean = True
+    has_error.short_description = 'Error'

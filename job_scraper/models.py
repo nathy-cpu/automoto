@@ -103,3 +103,29 @@ class Contact(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.title}) at {self.job.company}"
+
+
+class ScraperExecutionLog(models.Model):
+    """Logs the execution of the scraper, including success, errors, and debug artifacts"""
+    
+    SCRAPER_CHOICES = [
+        ('requests', 'Standard (Requests)'),
+        ('playwright', 'Stealth (Playwright)'),
+    ]
+    
+    website = models.ForeignKey(CustomWebsite, on_delete=models.CASCADE, related_name="execution_logs")
+    scraper_type = models.CharField(max_length=20, choices=SCRAPER_CHOICES, default='requests')
+    timestamp = models.DateTimeField(auto_now_add=True)
+    jobs_found = models.IntegerField(default=0)
+    error_message = models.TextField(blank=True)
+    
+    # Debug telemetry
+    screenshot = models.FileField(upload_to="artifacts/screenshots/", blank=True, null=True)
+    html_dump = models.FileField(upload_to="artifacts/html_dumps/", blank=True, null=True)
+
+    class Meta:
+        ordering = ["-timestamp"]
+
+    def __str__(self):
+        status = "Error" if self.error_message else "Success"
+        return f"{self.website.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M')} [{status}]"
