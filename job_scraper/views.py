@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 
 from .models import Contact, CustomWebsite, Job
 from .scrapers import JobScraper
@@ -107,7 +108,11 @@ def trigger_scrape(request: HttpRequest):
             except:
                 pass
 
-    return redirect("dashboard")
+    query_string = request.GET.urlencode()
+    redirect_url = reverse("dashboard")
+    if query_string:
+        redirect_url = f"{redirect_url}?{query_string}"
+    return redirect(redirect_url)
 
 
 def job_search(request: HttpRequest):
