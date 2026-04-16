@@ -47,12 +47,15 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "django_apscheduler",
     "job_scraper",
+    "debug_toolbar",
+    "django_admin_shell",
 ]
 
 # Enrichment Debug Mode (Minimal Credit Usage)
 DEBUG_ENRICHMENT = os.getenv("DEBUG_ENRICHMENT", "True").lower() == "true"
 
 MIDDLEWARE = [
+    "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -139,3 +142,15 @@ STATICFILES_DIRS = [
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Debug Toolbar Settings
+INTERNAL_IPS = [
+    "127.0.0.1",
+    "localhost",
+]
+DEBUG_TOOLBAR_CONFIG = {
+    "SHOW_COLLAPSED": True,
+}
+
+# Django Admin Shell Settings
+ADMIN_SHELL_ONLY_SUPERUSER = True
