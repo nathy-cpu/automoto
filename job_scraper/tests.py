@@ -5,7 +5,7 @@ from django.test import TestCase
 from bs4 import BeautifulSoup
 
 from job_scraper.models import CustomWebsite, Job
-from job_scraper.scrapers import EnhancedJobScraper
+from job_scraper.request_scraper import JobScraper
 
 
 class ModelTestCase(TestCase):

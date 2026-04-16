@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .models import Contact, CustomWebsite, Job
-from .scrapers import JobScraper
+from .request_scraper import JobScraper
 from .stealth_scraper import StealthScraper
 from .utils import get_continent_from_country
 
