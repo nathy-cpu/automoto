@@ -4,141 +4,141 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Custom Websites - Job Scraper</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     {% load static %}
-    <link rel="stylesheet" href="{% static 'job_scraper/css/style.css' %}">
     <link rel="stylesheet" href="{% static 'job_scraper/css/manage_websites.css' %}">
 </head>
 <body>
+    <header>
+        <a href="{% url 'dashboard' %}" class="logo">AutoMoto Sales Pro</a>
+        <div class="actions">
+            <a href="{% url 'dashboard' %}" class="back-link">&larr; Back to Dashboard</a>
+        </div>
+    </header>
+
     <div class="container">
-        <h1>Manage Custom Websites</h1>
+        <div class="title-section">
+            <h1>Custom Websites</h1>
+        </div>
         
         {% if messages %}
             {% for message in messages %}
-                <div class="{% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
+                <div class="message {% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
                     {{ message }}
                 </div>
             {% endfor %}
         {% endif %}
         
-        <div class="website-form">
+        <div class="website-form-card">
             <h2>Add New Website</h2>
             <form method="post">
                 {% csrf_token %}
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="name">Website Name:</label>
-                        <input type="text" id="name" name="name" required>
-                        <div class="help-text">A unique name for this website (e.g., "MyJobSite")</div>
+                        <label for="name">Website Name</label>
+                        <input type="text" id="name" name="name" placeholder="e.g. MyJobSite" required>
+                        <div class="help-text">A unique name for this service</div>
                     </div>
                     
                     <div class="form-group">
-                        <label for="base_url">Base URL:</label>
-                        <input type="url" id="base_url" name="base_url" required>
-                        <div class="help-text">Main website URL (e.g., https://example.com)</div>
+                        <label for="base_url">Base URL</label>
+                        <input type="url" id="base_url" name="base_url" placeholder="https://example.com" required>
+                        <div class="help-text">The website's homepage</div>
                     </div>
                 </div>
                 
                 <div class="form-group full-width">
-                    <label for="search_url">Search URL Template:</label>
-                    <input type="url" id="search_url" name="search_url" required>
-                    <div class="help-text">URL template with placeholders: {keywords}, {location}, {page} (e.g., https://example.com/jobs?q={keywords}&loc={location}&page={page})</div>
+                    <label for="search_url">Search URL Template</label>
+                    <input type="url" id="search_url" name="search_url" placeholder="https://example.com/jobs?q={keywords}&loc={location}" required>
+                    <div class="help-text">Use placeholders: <code>{keywords}</code>, <code>{location}</code>, <code>{page}</code></div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="job_list_selector">Job List Selector:</label>
-                        <input type="text" id="job_list_selector" name="job_list_selector" required>
-                        <div class="help-text">CSS selector for job listing containers (e.g., .job-item)</div>
+                        <label for="job_list_selector">Job List CSS Selector</label>
+                        <input type="text" id="job_list_selector" name="job_list_selector" placeholder=".job-item" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="title_selector">Job Title Selector:</label>
-                        <input type="text" id="title_selector" name="title_selector" required>
-                        <div class="help-text">CSS selector for job title (e.g., .job-title)</div>
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="company_selector">Company Selector:</label>
-                        <input type="text" id="company_selector" name="company_selector" required>
-                        <div class="help-text">CSS selector for company name (e.g., .company-name)</div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label for="location_selector">Location Selector:</label>
-                        <input type="text" id="location_selector" name="location_selector" required>
-                        <div class="help-text">CSS selector for job location (e.g., .job-location)</div>
+                        <label for="title_selector">Title CSS Selector</label>
+                        <input type="text" id="title_selector" name="title_selector" placeholder=".job-title" required>
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="job_link_selector">Job Link Selector:</label>
-                        <input type="text" id="job_link_selector" name="job_link_selector" required>
-                        <div class="help-text">CSS selector for job detail link (e.g., a.job-link)</div>
+                        <label for="company_selector">Company CSS Selector</label>
+                        <input type="text" id="company_selector" name="company_selector" placeholder=".company-name" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="salary_selector">Salary Selector (Optional):</label>
-                        <input type="text" id="salary_selector" name="salary_selector">
-                        <div class="help-text">CSS selector for salary information</div>
+                        <label for="location_selector">Location CSS Selector</label>
+                        <input type="text" id="location_selector" name="location_selector" placeholder=".job-location" required>
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="date_selector">Date Selector (Optional):</label>
-                        <input type="text" id="date_selector" name="date_selector">
-                        <div class="help-text">CSS selector for posted date</div>
+                        <label for="job_link_selector">Link CSS Selector</label>
+                        <input type="text" id="job_link_selector" name="job_link_selector" placeholder="a.job-link" required>
                     </div>
                     
                     <div class="form-group">
-                        <label for="apply_link_selector">Apply Link Selector (Optional):</label>
-                        <input type="text" id="apply_link_selector" name="apply_link_selector">
-                        <div class="help-text">CSS selector for direct apply link</div>
+                        <label for="salary_selector">Salary Selector (Optional)</label>
+                        <input type="text" id="salary_selector" name="salary_selector" placeholder=".salary">
                     </div>
                 </div>
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="description_selector">Description Selector (Optional):</label>
-                        <input type="text" id="description_selector" name="description_selector">
-                        <div class="help-text">CSS selector for job description</div>
+                        <label for="date_selector">Date Selector (Optional)</label>
+                        <input type="text" id="date_selector" name="date_selector" placeholder=".date">
                     </div>
                     
                     <div class="form-group">
-                        <label for="requirements_selector">Requirements Selector (Optional):</label>
-                        <input type="text" id="requirements_selector" name="requirements_selector">
-                        <div class="help-text">CSS selector for job requirements</div>
+                        <label for="apply_link_selector">Direct Apply Selector (Optional)</label>
+                        <input type="text" id="apply_link_selector" name="apply_link_selector" placeholder=".apply-btn">
                     </div>
                 </div>
                 
-                <button type="submit">Add Website</button>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="description_selector">Description Selector (Optional)</label>
+                        <input type="text" id="description_selector" name="description_selector" placeholder=".job-description">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="requirements_selector">Requirements Selector (Optional)</label>
+                        <input type="text" id="requirements_selector" name="requirements_selector" placeholder=".requirements">
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-submit">Add Website Configuration</button>
             </form>
         </div>
         
-        <div class="website-list">
-            <h2>Custom Websites</h2>
+        <div class="website-list-section">
+            <h2>Configured Websites</h2>
             {% if custom_websites %}
-                {% for website in custom_websites %}
-                    <div class="website-item">
-                        <div class="website-name">{{ website.name }}</div>
-                        <div class="website-url">{{ website.base_url }}</div>
-                        <div style="margin-top: 10px;">
-                            <a href="{% url 'delete_website' website.id %}" class="delete-btn" onclick="return confirm('Are you sure you want to delete this website?')">Delete</a>
+                <div class="website-grid">
+                    {% for website in custom_websites %}
+                        <div class="website-item-card">
+                            <div>
+                                <div class="website-name">{{ website.name }}</div>
+                                <div class="website-url">{{ website.base_url }}</div>
+                            </div>
+                            <a href="{% url 'delete_website' website.id %}" class="btn-delete" onclick="return confirm('Are you sure you want to delete this website configuration?')">Delete Configuration</a>
                         </div>
-                    </div>
-                {% endfor %}
+                    {% endfor %}
+                </div>
             {% else %}
-                <p>No custom websites added yet.</p>
+                <div class="website-item-card" style="text-align: center; padding: 3rem;">
+                    <p style="color: var(--text-dim);">No custom websites added yet.</p>
+                </div>
             {% endif %}
-        </div>
-        
-        <div style="margin-top: 30px;">
-            <a href="/" class="back-link">&larr; Back to Job Search</a>
         </div>
     </div>
 </body>
-</html> 
+</html>
+ 
