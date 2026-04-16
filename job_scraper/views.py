@@ -5,9 +5,9 @@ from django.core.paginator import Paginator
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 
-from .scrapers import EnhancedJobScraper
+from .models import Contact, CustomWebsite, Job
+from .scrapers import JobScraper
 from .stealth_scraper import StealthScraper
-from .models import CustomWebsite, Job, Contact
 from .utils import get_continent_from_country
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,9 @@ def dashboard(request: HttpRequest):
     # Search
     q = request.GET.get("q")
     if q:
-        queryset = queryset.filter(title__icontains=q) | queryset.filter(company__icontains=q)
+        queryset = queryset.filter(title__icontains=q) | queryset.filter(
+            company__icontains=q
+        )
 
     # Sort
     queryset = queryset.order_by("-created_at")
@@ -76,7 +78,7 @@ def dashboard(request: HttpRequest):
             "expertise": expertise,
             "is_rfp": is_rfp,
             "q": q,
-        }
+        },
     }
 
     return render(request, "job_scraper/dashboard.html", context)
@@ -84,19 +86,20 @@ def dashboard(request: HttpRequest):
 
 def trigger_scrape(request: HttpRequest):
     """
-    Manually triggers the scraper from the dashboard.
+    Manually triggers the consolidated scraper.
     """
     keywords = request.GET.get("q", "software contract")
     location = request.GET.get("countries", "us")
-    
-    # Run scraper (synchronous for now to show results immediately)
-    scraper = StealthScraper(headless=True)
-    new_jobs = scraper.scrape_indeed(keywords, location, max_pages=1)
-    
-    # Basic lead enrichment toggle for the newly found jobs
+
+    scraper = JobScraper()
+    new_jobs = scraper.get_recent_jobs(location, keywords, max_pages=1)
+
+    # Lead enrichment for new jobs
     from django.conf import settings
-    if settings.DEBUG_ENRICHMENT:
+
+    if settings.DEBUG_ENRICHMENT and new_jobs:
         from .apollo_client import ApolloClient
+
         apollo = ApolloClient()
         for job in new_jobs[:5]:
             try:
@@ -107,83 +110,30 @@ def trigger_scrape(request: HttpRequest):
     return redirect("dashboard")
 
 
-def _build_job_list(scraped_jobs: list[dict]) -> list[dict]:
-    jobs_data = []
-    for i, job in enumerate(scraped_jobs, start=1):
-        jobs_data.append(
-            {
-                "id": i,
-                "title": job.get("title", ""),
-                "company": job.get("company", ""),
-                "location": job.get("location", ""),
-                "source_website": job.get("source_website", ""),
-                "salary": job.get("salary", ""),
-                "posted_date": job.get("posted_date", ""),
-                "job_url": job.get("job_url", ""),
-                "source_url": job.get("source_url", ""),
-                "description": job.get("description", ""),
-                "requirements": job.get("requirements", ""),
-                "application_link": job.get("application_link", ""),
-                "job_type": job.get("job_type", ""),
-                "experience_level": job.get("experience_level", ""),
-                "industry": job.get("industry", ""),
-            }
-        )
-    return jobs_data
-
-
-def _job_search_context(
-    *,
-    results=None,
-    pagination=None,
-    params=None,
-    error=None,
-) -> dict:
-    context = {
-        "custom_websites": CustomWebsite.objects.filter(is_active=True),
-    }
-    if results is not None:
-        context["results"] = results
-    if pagination is not None:
-        context["pagination"] = pagination
-    if params is not None:
-        context["params"] = params
-    if error:
-        context["error"] = error
-    return context
-
-
 def job_search(request: HttpRequest):
+    """
+    Unified job search that uses all active custom sources.
+    """
     if request.method == "POST":
         keywords = request.POST.get("keywords", "")
         location = request.POST.get("location", "")
-        websites = request.POST.getlist("websites") or DEFAULT_WEBSITES
 
         params = {
             "keywords": keywords,
             "location": location,
-            "websites": websites,
         }
 
         try:
             country = str(location).strip() or "us"
             search_keywords = str(keywords).strip() or None
-            
-            # Use StealthScraper for Indeed
-            if "indeed" in [w.lower() for w in websites]:
-                scraper = StealthScraper(headless=True)
-                scraper.scrape_indeed(search_keywords, country, max_pages=1)
 
-            enhanced_scraper = EnhancedJobScraper()
-            scraped_jobs = enhanced_scraper.get_recent_jobs(
-                websites, country, search_keywords, max_pages=5
+            scraper = JobScraper()
+            scraped_jobs = scraper.get_recent_jobs(
+                country, search_keywords, max_pages=2
             )
-            jobs_data = _build_job_list(scraped_jobs)
 
-            request.session["scraped_jobs"] = jobs_data
-            request.session["search_params"] = params
-
-            paginator = Paginator(jobs_data, RESULTS_PER_PAGE)
+            # Since get_recent_jobs now returns Job objects, we just need to provide them to context
+            paginator = Paginator(scraped_jobs, RESULTS_PER_PAGE)
             page_number = request.GET.get("page", 1)
             page_obj = paginator.get_page(page_number)
 
@@ -191,11 +141,11 @@ def job_search(request: HttpRequest):
                 results=page_obj, pagination=page_obj, params=params
             )
         except Exception as e:
-            logger.error(f"Error during job scraping: {e}")
+            logger.error(f"Error during unified job search: {e}")
             context = _job_search_context(
                 results=[],
                 params=params,
-                error="An error occurred while scraping jobs. Please try again.",
+                error="An error occurred while scraping. Please try again.",
             )
 
         return render(request, "job_scraper/job_search.html", context)
@@ -306,6 +256,7 @@ def manage_websites(request: HttpRequest):
                 apply_link_selector=request.POST.get("apply_link_selector", ""),
                 description_selector=request.POST.get("description_selector", ""),
                 requirements_selector=request.POST.get("requirements_selector", ""),
+                use_stealth=request.POST.get("use_stealth") == "on",
             )
             messages.success(request, f'Website "{name}" added successfully!')
             return redirect("manage_websites")
@@ -327,3 +278,34 @@ def delete_website(request: HttpRequest, website_id: int):
     website.save()
     messages.success(request, f'Website "{website.name}" deleted successfully!')
     return redirect("manage_websites")
+
+
+def edit_website(request: HttpRequest, website_id: int):
+    """View to edit an existing custom website configuration"""
+    website = get_object_or_404(CustomWebsite, id=website_id)
+
+    if request.method == "POST":
+        website.name = request.POST.get("name")
+        website.base_url = request.POST.get("base_url")
+        website.search_url = request.POST.get("search_url")
+        website.job_list_selector = request.POST.get("job_list_selector")
+        website.title_selector = request.POST.get("title_selector")
+        website.company_selector = request.POST.get("company_selector")
+        website.location_selector = request.POST.get("location_selector")
+        website.job_link_selector = request.POST.get("job_link_selector")
+        website.salary_selector = request.POST.get("salary_selector", "")
+        website.date_selector = request.POST.get("date_selector", "")
+        website.apply_link_selector = request.POST.get("apply_link_selector", "")
+        website.description_selector = request.POST.get("description_selector", "")
+        website.requirements_selector = request.POST.get("requirements_selector", "")
+        website.use_stealth = request.POST.get("use_stealth") == "on"
+
+        website.save()
+        messages.success(request, f'Website "{website.name}" updated successfully!')
+        return redirect("manage_websites")
+
+    return render(
+        request,
+        "job_scraper/edit_website.html",
+        {"website": website},
+    )

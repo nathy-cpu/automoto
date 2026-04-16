@@ -14,8 +14,12 @@
 
     <header>
         <div class="logo">AutoMoto Sales Pro</div>
+        <nav class="nav-menu">
+            <a href="{% url 'dashboard' %}" class="nav-link active">Dashboard</a>
+            <a href="{% url 'manage_websites' %}" class="nav-link">Manage Sources</a>
+        </nav>
         <div class="actions">
-            <!-- Add future action buttons here -->
+            <!-- Space for user profile/settings etc -->
         </div>
     </header>
 

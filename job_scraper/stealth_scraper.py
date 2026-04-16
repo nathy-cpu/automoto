@@ -1,144 +1,183 @@
 import asyncio
+import logging
 import random
 import time
-import logging
+
 from playwright.sync_api import sync_playwright
 from playwright_stealth import Stealth
-from .models import Job
+
+from .models import CustomWebsite, Job
 from .utils import get_continent_from_country
 
 logger = logging.getLogger(__name__)
 
+
 class StealthScraper:
     """
-    A modern scraper for Indeed using Playwright and stealth plugins.
+    A generic stealth scraper using Playwright to bypass bot protection.
     """
+
     def __init__(self, headless=True):
         self.headless = headless
 
-    def _get_search_url(self, keywords, location, job_type="contract"):
-        base_url = "https://www.indeed.com/jobs"
-        import urllib.parse
-        params = {
-            'q': keywords,
-            'l': location,
-            'jt': job_type,
-            'fromage': 1, # Last 24 hours
-        }
-        return f"{base_url}?{urllib.parse.urlencode(params)}"
-
-    def scrape_indeed(self, keywords, location, max_pages=1):
+    def scrape(
+        self, website: CustomWebsite, keywords: str, location: str, max_pages: int = 1
+    ):
+        """
+        Generic scrape method that uses a CustomWebsite object's selectors.
+        """
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=self.headless)
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
             )
             page = context.new_page()
             Stealth().apply_stealth_sync(page)
 
-            search_url = self._get_search_url(keywords, location)
-            logger.info(f"Navigating to {search_url}")
-            
-            try:
-                # Use a slower, more human-like wait
-                page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-                
-                # Randomized sleep to mimic human reading
-                time.sleep(random.uniform(3, 7))
-                
-                # Scroll a bit to trigger lazy loading
-                page.evaluate("window.scrollTo(0, 500)")
-                time.sleep(1)
+            all_new_jobs = []
 
-                # Wait for job cards with a fallback
+            for page_num in range(max_pages):
+                # Build search URL from template
+                search_url = website.search_url
+                if "{keywords}" in search_url:
+                    search_url = search_url.replace("{keywords}", keywords)
+                if "{location}" in search_url:
+                    search_url = search_url.replace("{location}", location)
+                if "{page}" in search_url:
+                    search_url = search_url.replace("{page}", str(page_num + 1))
+
+                logger.info(f"Navigating to {search_url} (Page {page_num+1})")
+
                 try:
-                    page.wait_for_selector('[data-jk]', timeout=30000)
-                except Exception:
-                    logger.warning("Job cards selector timeout, checking page content...")
-                
-                # Check for "reCAPTCHA" or other blocks
-                if "hcaptcha" in page.content().lower() or "recaptcha" in page.content().lower():
-                    logger.error("Detected a CAPTCHA. Need to handle or use proxies.")
-                    return []
+                    page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
+                    time.sleep(random.uniform(4, 8))
 
-                job_elements = page.query_selector_all('[data-jk]')
-                logger.info(f"Found {len(job_elements)} job cards.")
+                    # Scroll to trigger lazy loading
+                    page.evaluate("window.scrollTo(0, 800)")
+                    time.sleep(1)
 
-                jobs_data = []
-                for element in job_elements:
+                    # Wait for results or timeout
                     try:
-                        job_id = element.get_attribute('data-jk')
-                        title_elem = element.query_selector('h2.jobTitle span[title]')
-                        title = title_elem.get_attribute('title') if title_elem else ""
-                        
-                        company_elem = element.query_selector('[data-testid="company-name"]')
-                        company = company_elem.inner_text() if company_elem else ""
-                        
-                        location_elem = element.query_selector('[data-testid="text-location"]')
-                        loc_text = location_elem.inner_text() if location_elem else ""
-                        
-                        # Build a detail URL
-                        job_url = f"https://www.indeed.com/viewjob?jk={job_id}"
-                        
-                        jobs_data.append({
-                            'id': job_id,
-                            'title': title,
-                            'company': company,
-                            'location': loc_text,
-                            'source_url': job_url,
-                            'source_website': 'Indeed',
-                            'is_rfp': 'contract' in keywords.lower() or 'rfp' in keywords.lower()
-                        })
-                    except Exception as e:
-                        logger.error(f"Error parsing job card: {e}")
-                
-                # Deduplicate and save
-                new_jobs = []
-                for data in jobs_data:
-                    city = ""
-                    country = ""
-                    if "," in data['location']:
-                        parts = data['location'].split(",")
-                        city = parts[0].strip()
-                        country = parts[1].strip()
-                    else:
-                        country = data['location'].strip()
+                        page.wait_for_selector(website.job_list_selector, timeout=20000)
+                    except Exception:
+                        logger.warning(
+                            f"Timeout waiting for {website.job_list_selector}"
+                        )
 
-                    continent = get_continent_from_country(country)
+                    # Check for CAPTCHA
+                    content_lower = page.content().lower()
+                    if any(
+                        x in content_lower
+                        for x in ["recaptcha", "hcaptcha", "cloudflare"]
+                    ):
+                        logger.error(f"Anti-bot detected on {website.name}")
+                        break
 
-                    job, created = Job.objects.update_or_create(
-                        source_url=data['source_url'],
-                        defaults={
-                            'title': data['title'],
-                            'company': data['company'],
-                            'location': data['location'],
-                            'city': city,
-                            'country': country,
-                            'continent': continent,
-                            'source_website': data['source_website'],
-                            'is_rfp': data['is_rfp'],
-                            # We'll fill description and summary later to keep it fast
-                        }
+                    job_elements = page.query_selector_all(website.job_list_selector)
+                    logger.info(
+                        f"Found {len(job_elements)} job cards on {website.name}"
                     )
-                    if created:
-                        new_jobs.append(job)
-                
-                return new_jobs
 
-            except Exception as e:
-                logger.error(f"Scrape failed: {e}")
-                # Optional: screenshot for debugging in non-docker environments
-                # page.screenshot(path="scrape_fail.png")
-                return []
-            finally:
-                browser.close()
+                    for element in job_elements:
+                        try:
+                            # Extract data using model selectors
+                            title = ""
+                            if website.title_selector:
+                                title_elem = element.query_selector(
+                                    website.title_selector
+                                )
+                                if title_elem:
+                                    # Try title attribute first, then inner text
+                                    title = (
+                                        title_elem.get_attribute("title")
+                                        or title_elem.inner_text()
+                                    )
+
+                            company = ""
+                            if website.company_selector:
+                                company_elem = element.query_selector(
+                                    website.company_selector
+                                )
+                                company = (
+                                    company_elem.inner_text() if company_elem else ""
+                                )
+
+                            loc_text = ""
+                            if website.location_selector:
+                                location_elem = element.query_selector(
+                                    website.location_selector
+                                )
+                                loc_text = (
+                                    location_elem.inner_text() if location_elem else ""
+                                )
+
+                            job_url = ""
+                            if website.job_link_selector:
+                                link_elem = element.query_selector(
+                                    website.job_link_selector
+                                )
+                                if link_elem:
+                                    relative_url = link_elem.get_attribute("href")
+                                    if relative_url:
+                                        from urllib.parse import urljoin
+
+                                        job_url = urljoin(
+                                            website.base_url, relative_url
+                                        )
+
+                            if not job_url or not title:
+                                continue
+
+                            # Save/Update Job
+                            city = ""
+                            country = ""
+                            if "," in loc_text:
+                                parts = loc_text.split(",")
+                                city = parts[0].strip()
+                                country = parts[1].strip()
+                            else:
+                                country = loc_text.strip()
+
+                            continent = get_continent_from_country(country)
+
+                            job, created = Job.objects.update_or_create(
+                                source_url=job_url,
+                                defaults={
+                                    "title": title.strip(),
+                                    "company": company.strip(),
+                                    "location": loc_text.strip(),
+                                    "city": city,
+                                    "country": country,
+                                    "continent": continent,
+                                    "source_website": website.name,
+                                    "is_rfp": "contract" in keywords.lower()
+                                    or "rfp" in keywords.lower(),
+                                },
+                            )
+                            if created:
+                                all_new_jobs.append(job)
+
+                        except Exception as e:
+                            logger.error(f"Error parsing card on {website.name}: {e}")
+
+                except Exception as e:
+                    logger.error(f"Page navigation failed for {website.name}: {e}")
+                    break
+
+            browser.close()
+            return all_new_jobs
+
+    def scrape_indeed(self, keywords, location, max_pages=1):
+        """Deprecated: Use generic scrape() instead"""
+        website = CustomWebsite.objects.get(name="Indeed")
+        return self.scrape(website, keywords, location, max_pages)
 
     def _get_description(self, page, job_url):
         """Fetch job description from a specific job URL."""
         try:
             page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
             time.sleep(random.uniform(1, 3))
-            desc_elem = page.query_selector('#jobDescriptionText')
+            desc_elem = page.query_selector("#jobDescriptionText")
             return desc_elem.inner_text() if desc_elem else ""
         except Exception as e:
             logger.error(f"Failed to get description for {job_url}: {e}")

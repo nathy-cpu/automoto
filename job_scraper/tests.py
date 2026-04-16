@@ -4,8 +4,8 @@ from django.test import TestCase
 
 from bs4 import BeautifulSoup
 
-from job_scraper.scrapers import EnhancedJobScraper
 from job_scraper.models import CustomWebsite, Job
+from job_scraper.scrapers import EnhancedJobScraper
 
 
 class ModelTestCase(TestCase):

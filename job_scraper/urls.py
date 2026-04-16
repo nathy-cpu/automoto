@@ -11,4 +11,5 @@ urlpatterns = [
     path(
         "websites/delete/<int:website_id>/", views.delete_website, name="delete_website"
     ),
+    path("websites/edit/<int:website_id>/", views.edit_website, name="edit_website"),
 ]

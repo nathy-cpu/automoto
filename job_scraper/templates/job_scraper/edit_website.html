@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Website - {{ website.name }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'job_scraper/css/manage_websites.css' %}">
+</head>
+<body>
+    <header>
+        <a href="{% url 'dashboard' %}" class="logo">AutoMoto Sales Pro</a>
+        <nav class="nav-menu">
+            <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
+            <a href="{% url 'manage_websites' %}" class="nav-link">Manage Sources</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <div class="title-section">
+            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <a href="{% url 'manage_websites' %}" class="back-link">← Back to Management</a>
+                <h1>Edit Configuration: {{ website.name }}</h1>
+            </div>
+        </div>
+        
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message {% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+        
+        <div class="website-form-card">
+            <h2>Update Settings</h2>
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="name">Website Name</label>
+                        <input type="text" id="name" name="name" value="{{ website.name }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="base_url">Base URL</label>
+                        <input type="url" id="base_url" name="base_url" value="{{ website.base_url }}" required>
+                    </div>
+                </div>
+                
+                <div class="form-group full-width">
+                    <label for="search_url">Search URL Template</label>
+                    <input type="url" id="search_url" name="search_url" value="{{ website.search_url }}" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="job_list_selector">Job List CSS Selector</label>
+                        <input type="text" id="job_list_selector" name="job_list_selector" value="{{ website.job_list_selector }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="title_selector">Title CSS Selector</label>
+                        <input type="text" id="title_selector" name="title_selector" value="{{ website.title_selector }}" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="company_selector">Company CSS Selector</label>
+                        <input type="text" id="company_selector" name="company_selector" value="{{ website.company_selector }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="location_selector">Location CSS Selector</label>
+                        <input type="text" id="location_selector" name="location_selector" value="{{ website.location_selector }}" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="job_link_selector">Link CSS Selector</label>
+                        <input type="text" id="job_link_selector" name="job_link_selector" value="{{ website.job_link_selector }}" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="salary_selector">Salary Selector (Optional)</label>
+                        <input type="text" id="salary_selector" name="salary_selector" value="{{ website.salary_selector }}">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="date_selector">Date Selector (Optional)</label>
+                        <input type="text" id="date_selector" name="date_selector" value="{{ website.date_selector }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="apply_link_selector">Direct Apply Selector (Optional)</label>
+                        <input type="text" id="apply_link_selector" name="apply_link_selector" value="{{ website.apply_link_selector }}">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="description_selector">Description Selector (Optional)</label>
+                        <input type="text" id="description_selector" name="description_selector" value="{{ website.description_selector }}">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="requirements_selector">Requirements Selector (Optional)</label>
+                        <input type="text" id="requirements_selector" name="requirements_selector" value="{{ website.requirements_selector }}">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem; grid-column: 1 / -1; margin-top: 1rem;">
+                        <input type="checkbox" id="use_stealth" name="use_stealth" {% if website.use_stealth %}checked{% endif %} style="width: auto; cursor: pointer;">
+                        <label for="use_stealth" style="margin-bottom: 0; cursor: pointer; text-transform: none; color: var(--text-main);">
+                            Use high-protection stealth browser (Playwright) for this site
+                        </label>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-submit">Save Changes</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

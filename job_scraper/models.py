@@ -26,8 +26,12 @@ class Job(models.Model):
     )  # indeed, linkedin, custom website, etc.
     source_url = models.URLField(blank=True)
     continent = models.CharField(max_length=100, blank=True)
-    expertise_tags = models.TextField(blank=True, help_text="Comma-separated expertise/skills")
-    needs_summary = models.TextField(blank=True, help_text="AI-generated summary of client needs")
+    expertise_tags = models.TextField(
+        blank=True, help_text="Comma-separated expertise/skills"
+    )
+    needs_summary = models.TextField(
+        blank=True, help_text="AI-generated summary of client needs"
+    )
     is_rfp = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -69,6 +73,10 @@ class CustomWebsite(models.Model):
     requirements_selector = models.CharField(
         max_length=200, blank=True
     )  # CSS selector for requirements
+    use_stealth = models.BooleanField(
+        default=False,
+        help_text="Use high-protection stealth browser (Playwright) for this site",
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
