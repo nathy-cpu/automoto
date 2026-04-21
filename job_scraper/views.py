@@ -5,6 +5,7 @@ from django.core.paginator import Paginator
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.conf import settings
 
 from .models import Contact, CustomWebsite, Job
 from .request_scraper import JobScraper
@@ -72,6 +73,7 @@ def dashboard(request: HttpRequest):
         "all_continents": [c for c in all_continents if c],
         "all_countries": [c for c in all_countries if c],
         "all_industries": [i for i in all_industries if i],
+        "active_websites": CustomWebsite.objects.filter(is_active=True),
         "filters": {
             "continents": continents,
             "countries": countries,
@@ -79,6 +81,7 @@ def dashboard(request: HttpRequest):
             "expertise": expertise,
             "is_rfp": is_rfp,
             "q": q,
+            "source_id": request.GET.get("source_id", ""),
         },
     }
 
@@ -91,12 +94,19 @@ def trigger_scrape(request: HttpRequest):
     """
     keywords = request.GET.get("q", "software contract")
     location = request.GET.get("countries", "us")
+    source_id = request.GET.get("source_id")
+    
+    website_id = None
+    if source_id and source_id != "all":
+        try:
+            website_id = int(source_id)
+        except ValueError:
+            pass
 
     scraper = JobScraper()
-    new_jobs = scraper.get_recent_jobs(location, keywords, max_pages=1)
+    new_jobs = scraper.get_recent_jobs(location, keywords, max_pages=1, website_id=website_id)
 
     # Lead enrichment for new jobs
-    from django.conf import settings
 
     if settings.DEBUG_ENRICHMENT and new_jobs:
         from .apollo_client import ApolloClient
@@ -234,34 +244,31 @@ def manage_websites(request: HttpRequest):
         company_selector = request.POST.get("company_selector")
         location_selector = request.POST.get("location_selector")
         job_link_selector = request.POST.get("job_link_selector")
-
-        if all(
-            [
-                name,
-                base_url,
-                search_url,
-                job_list_selector,
-                title_selector,
-                company_selector,
-                location_selector,
-                job_link_selector,
-            ]
-        ):
+        is_api = request.POST.get("is_api") == "on"
+        
+        if name and base_url and search_url:
             CustomWebsite.objects.create(
                 name=name,
                 base_url=base_url,
                 search_url=search_url,
-                job_list_selector=job_list_selector,
-                title_selector=title_selector,
-                company_selector=company_selector,
-                location_selector=location_selector,
-                job_link_selector=job_link_selector,
+                job_list_selector=job_list_selector or "N/A",
+                title_selector=title_selector or "N/A",
+                company_selector=company_selector or "N/A",
+                location_selector=location_selector or "N/A",
+                job_link_selector=job_link_selector or "N/A",
                 salary_selector=request.POST.get("salary_selector", ""),
                 date_selector=request.POST.get("date_selector", ""),
                 apply_link_selector=request.POST.get("apply_link_selector", ""),
                 description_selector=request.POST.get("description_selector", ""),
                 requirements_selector=request.POST.get("requirements_selector", ""),
                 use_stealth=request.POST.get("use_stealth") == "on",
+                is_api=is_api,
+                api_jobs_path=request.POST.get("api_jobs_path", ""),
+                api_title_key=request.POST.get("api_title_key", ""),
+                api_company_key=request.POST.get("api_company_key", ""),
+                api_location_key=request.POST.get("api_location_key", ""),
+                api_description_key=request.POST.get("api_description_key", ""),
+                api_url_key=request.POST.get("api_url_key", ""),
             )
             messages.success(request, f'Website "{name}" added successfully!')
             return redirect("manage_websites")

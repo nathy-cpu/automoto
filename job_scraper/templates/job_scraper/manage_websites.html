@@ -63,84 +63,146 @@
                 </div>
 
                 <div class="form-row">
-                    <div class="form-group">
-                        <label for="job_list_selector">Job List CSS Selector</label>
-                        <input type="text" id="job_list_selector" name="job_list_selector" placeholder=".job-item"
-                            required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="title_selector">Title CSS Selector</label>
-                        <input type="text" id="title_selector" name="title_selector" placeholder=".job-title" required>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="company_selector">Company CSS Selector</label>
-                        <input type="text" id="company_selector" name="company_selector" placeholder=".company-name"
-                            required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="location_selector">Location CSS Selector</label>
-                        <input type="text" id="location_selector" name="location_selector" placeholder=".job-location"
-                            required>
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="job_link_selector">Link CSS Selector</label>
-                        <input type="text" id="job_link_selector" name="job_link_selector" placeholder="a.job-link"
-                            required>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="salary_selector">Salary Selector (Optional)</label>
-                        <input type="text" id="salary_selector" name="salary_selector" placeholder=".salary">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="date_selector">Date Selector (Optional)</label>
-                        <input type="text" id="date_selector" name="date_selector" placeholder=".date">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="apply_link_selector">Direct Apply Selector (Optional)</label>
-                        <input type="text" id="apply_link_selector" name="apply_link_selector" placeholder=".apply-btn">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="description_selector">Description Selector (Optional)</label>
-                        <input type="text" id="description_selector" name="description_selector"
-                            placeholder=".job-description">
-                    </div>
-
-                    <div class="form-group">
-                        <label for="requirements_selector">Requirements Selector (Optional)</label>
-                        <input type="text" id="requirements_selector" name="requirements_selector"
-                            placeholder=".requirements">
-                    </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group"
-                        style="display: flex; align-items: center; gap: 0.75rem; grid-column: 1 / -1; margin-top: 1rem;">
-                        <input type="checkbox" id="use_stealth" name="use_stealth"
-                            style="width: auto; cursor: pointer;">
-                        <label for="use_stealth"
-                            style="margin-bottom: 0; cursor: pointer; text-transform: none; color: var(--text-main);">
-                            Use high-protection stealth browser (Playwright) for this site
+                    <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem; grid-column: 1 / -1; margin-bottom: 1rem; padding: 1rem; background: rgba(58, 134, 255, 0.05); border-radius: 8px; border: 1px dashed var(--primary);">
+                        <input type="checkbox" id="is_api" name="is_api" style="width: auto; cursor: pointer;" onchange="toggleMode()">
+                        <label for="is_api" style="margin-bottom: 0; cursor: pointer; text-transform: none; color: var(--primary); font-weight: 600;">
+                            This source is a JSON API (Bypass Scraping)
                         </label>
                     </div>
                 </div>
 
-                <button type="submit" class="btn-submit">Add Website Configuration</button>
+                <div id="scraping-fields">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="job_list_selector">Job List CSS Selector</label>
+                            <input type="text" id="job_list_selector" name="job_list_selector" placeholder=".job-item" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="title_selector">Title CSS Selector</label>
+                            <input type="text" id="title_selector" name="title_selector" placeholder=".job-title" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="company_selector">Company CSS Selector</label>
+                            <input type="text" id="company_selector" name="company_selector" placeholder=".company-name" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="location_selector">Location CSS Selector</label>
+                            <input type="text" id="location_selector" name="location_selector" placeholder=".job-location" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="job_link_selector">Link CSS Selector</label>
+                            <input type="text" id="job_link_selector" name="job_link_selector" placeholder="a.job-link" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="salary_selector">Salary Selector (Optional)</label>
+                            <input type="text" id="salary_selector" name="salary_selector" placeholder=".salary">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="date_selector">Date Selector (Optional)</label>
+                            <input type="text" id="date_selector" name="date_selector" placeholder=".date">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="apply_link_selector">Direct Apply Selector (Optional)</label>
+                            <input type="text" id="apply_link_selector" name="apply_link_selector" placeholder=".apply-btn">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="description_selector">Description Selector (Optional)</label>
+                            <input type="text" id="description_selector" name="description_selector" placeholder=".job-description">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="requirements_selector">Requirements Selector (Optional)</label>
+                            <input type="text" id="requirements_selector" name="requirements_selector" placeholder=".requirements">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group" style="display: flex; align-items: center; gap: 0.75rem; grid-column: 1 / -1; margin-top: 1rem;">
+                            <input type="checkbox" id="use_stealth" name="use_stealth" style="width: auto; cursor: pointer;">
+                            <label for="use_stealth" style="margin-bottom: 0; cursor: pointer; text-transform: none; color: var(--text-main);">
+                                Use high-protection stealth browser (Playwright) for this site
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="api-fields" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="api_jobs_path">JSON Path to Jobs List</label>
+                            <input type="text" id="api_jobs_path" name="api_jobs_path" placeholder="e.g. data or results">
+                            <div class="help-text">Use dot notation for nested keys (e.g. search.results)</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="api_title_key">Job Title Key</label>
+                            <input type="text" id="api_title_key" name="api_title_key" placeholder="e.g. title">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="api_company_key">Company Name Key</label>
+                            <input type="text" id="api_company_key" name="api_company_key" placeholder="e.g. company_name">
+                        </div>
+                        <div class="form-group">
+                            <label for="api_location_key">Location Key</label>
+                            <input type="text" id="api_location_key" name="api_location_key" placeholder="e.g. location">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="api_description_key">Description Key</label>
+                            <input type="text" id="api_description_key" name="api_description_key" placeholder="e.g. description">
+                        </div>
+                        <div class="form-group">
+                            <label for="api_url_key">Job URL Key</label>
+                            <input type="text" id="api_url_key" name="api_url_key" placeholder="e.g. url">
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    function toggleMode() {
+                        const isApi = document.getElementById('is_api').checked;
+                        const scrapingFields = document.getElementById('scraping-fields');
+                        const apiFields = document.getElementById('api-fields');
+                        
+                        // Toggle displays
+                        scrapingFields.style.display = isApi ? 'none' : 'block';
+                        apiFields.style.display = isApi ? 'block' : 'none';
+                        
+                        // Toggle required attributes
+                        const scrapeInputs = scrapingFields.querySelectorAll('input[type="text"]');
+                        const apiInputs = apiFields.querySelectorAll('input[type="text"]');
+                        
+                        scrapeInputs.forEach(input => {
+                            if (!input.placeholder.includes('Optional')) {
+                                input.required = !isApi;
+                            }
+                        });
+                        
+                        apiInputs.forEach(input => {
+                            input.required = isApi;
+                        });
+                    }
+                </script>
+
+                <button type="submit" class="btn-submit" style="margin-top: 1.5rem;">Add Website Configuration</button>
             </form>
         </div>
 

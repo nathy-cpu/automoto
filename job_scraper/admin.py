@@ -10,9 +10,35 @@ class JobAdmin(admin.ModelAdmin):
 
 @admin.register(CustomWebsite)
 class CustomWebsiteAdmin(admin.ModelAdmin):
-    list_display = ('name', 'base_url', 'use_stealth', 'is_active', 'created_at')
-    list_filter = ('is_active', 'use_stealth')
+    list_display = ('name', 'base_url', 'is_api', 'use_stealth', 'is_active', 'created_at')
+    list_filter = ('is_active', 'is_api', 'use_stealth')
     search_fields = ('name', 'base_url')
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'base_url', 'search_url', 'is_active')
+        }),
+        ('CSS Selector Mode', {
+            'fields': (
+                'use_stealth', 'job_list_selector', 'title_selector', 
+                'company_selector', 'location_selector', 'salary_selector',
+                'date_selector', 'job_link_selector', 'apply_link_selector',
+                'description_selector', 'requirements_selector'
+            ),
+            'classes': ('collapse',),
+            'description': 'Configure these if using standard web scraping'
+        }),
+        ('JSON API Mode', {
+            'fields': (
+                'is_api', 'api_jobs_path', 'api_title_key', 
+                'api_company_key', 'api_location_key', 'api_description_key', 
+                'api_url_key'
+            ),
+            'description': 'Configure these if the search URL returns JSON'
+        }),
+        ('Metadata', {
+            'fields': ('created_at',),
+        }),
+    )
     readonly_fields = ('created_at',)
 
 @admin.register(Contact)

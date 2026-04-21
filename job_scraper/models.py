@@ -77,6 +77,15 @@ class CustomWebsite(models.Model):
         default=False,
         help_text="Use high-protection stealth browser (Playwright) for this site",
     )
+    # API Support
+    is_api = models.BooleanField(default=False, help_text="Set to true if this is a JSON API endpoint")
+    api_jobs_path = models.CharField(max_length=255, blank=True, help_text="Key path to the list of jobs (e.g. 'data')")
+    api_title_key = models.CharField(max_length=100, blank=True, help_text="JSON key for job title")
+    api_company_key = models.CharField(max_length=100, blank=True, help_text="JSON key for company")
+    api_location_key = models.CharField(max_length=100, blank=True, help_text="JSON key for location")
+    api_description_key = models.CharField(max_length=100, blank=True, help_text="JSON key for description")
+    api_url_key = models.CharField(max_length=100, blank=True, help_text="JSON key for job URL")
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -111,6 +120,7 @@ class ScraperExecutionLog(models.Model):
     SCRAPER_CHOICES = [
         ('requests', 'Standard (Requests)'),
         ('playwright', 'Stealth (Playwright)'),
+        ('api', 'JSON API'),
     ]
     
     website = models.ForeignKey(CustomWebsite, on_delete=models.CASCADE, related_name="execution_logs")

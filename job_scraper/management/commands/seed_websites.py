@@ -32,6 +32,23 @@ class Command(BaseCommand):
                 "description_selector": ".show-more-less-html",
                 "use_stealth": False,  # LinkedIn sometimes works with requests if not too frequent
             },
+            {
+                "name": "Arbeitnow (API)",
+                "base_url": "https://www.arbeitnow.com",
+                "search_url": "https://www.arbeitnow.com/api/job-board-api?search={keywords}",
+                "job_list_selector": "N/A",
+                "title_selector": "N/A",
+                "company_selector": "N/A",
+                "location_selector": "N/A",
+                "job_link_selector": "N/A",
+                "is_api": True,
+                "api_jobs_path": "data",
+                "api_title_key": "title",
+                "api_company_key": "company_name",
+                "api_location_key": "location",
+                "api_description_key": "description",
+                "api_url_key": "url",
+            },
         ]
 
         for ws_data in websites:

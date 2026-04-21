@@ -45,14 +45,23 @@ class JobScraper:
         country: str,
         keywords: Optional[str] = None,
         max_pages: int = 2,
+        website_id: Optional[int] = None,
     ) -> List[Job]:
-        """Get recent job postings from all active custom websites"""
+        """Get recent job postings from active custom websites"""
         all_new_jobs = []
         active_websites = CustomWebsite.objects.filter(is_active=True)
+        if website_id:
+            active_websites = active_websites.filter(id=website_id)
 
         for website in active_websites:
             try:
-                if website.use_stealth:
+                if website.is_api:
+                    from .api_scraper import ApiScraper
+
+                    scraper = ApiScraper()
+                    jobs = scraper.scrape(website, keywords, country)
+                    all_new_jobs.extend(jobs)
+                elif website.use_stealth:
                     from .stealth_scraper import StealthScraper
 
                     scraper = StealthScraper(headless=True)
@@ -116,6 +125,8 @@ class JobScraper:
                         job_data = self._parse_custom_card(
                             card,
                             website,
+                            page + 1,
+                            card_number,
                         )
                         if job_data:
                             # If we have a detail link and description selector, fetch details

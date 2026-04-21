@@ -26,8 +26,9 @@ class Command(BaseCommand):
             self.style.SUCCESS(f"Starting scraper for '{keywords}' in '{location}'...")
         )
 
-        scraper = StealthScraper(headless=True)
-        new_jobs = scraper.scrape_indeed(keywords, location, max_pages=1)
+        from job_scraper.request_scraper import JobScraper
+        scraper = JobScraper()
+        new_jobs = scraper.get_recent_jobs(location, keywords, max_pages=1)
 
         self.stdout.write(
             self.style.SUCCESS(
