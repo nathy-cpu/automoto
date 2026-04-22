@@ -2,12 +2,15 @@ import logging
 import os
 
 from django.conf import settings
+from django.core.cache import cache
 
 import requests
 
 from .models import Contact
 
 logger = logging.getLogger(__name__)
+
+APOLLO_BACKOFF_CACHE_KEY = "apollo_api_backoff"
 
 
 class ApolloClient:
@@ -38,6 +41,15 @@ class ApolloClient:
 
         if not self.api_key:
             logger.error("Apollo API Key is missing.")
+            return []
+
+        backoff_status = cache.get(APOLLO_BACKOFF_CACHE_KEY)
+        if backoff_status:
+            logger.warning(
+                "apollo_search_skipped_backoff company=%s status=%s",
+                company_name,
+                backoff_status,
+            )
             return []
 
         endpoint = f"{self.base_url}/mixed_people/search"
@@ -78,8 +90,9 @@ class ApolloClient:
         except requests.HTTPError as exc:
             response = exc.response
             status_code = response.status_code if response is not None else None
+            body = response.text[:500] if response is not None else ""
+
             if status_code == 422:
-                body = response.text[:500] if response is not None else ""
                 logger.warning(
                     "apollo_search_unprocessable company=%s status=%s body=%s",
                     company_name,
@@ -87,6 +100,27 @@ class ApolloClient:
                     body,
                 )
                 return []
+
+            if status_code in (401, 403):
+                cache.set(APOLLO_BACKOFF_CACHE_KEY, status_code, timeout=900)
+                logger.warning(
+                    "apollo_search_forbidden company=%s status=%s body=%s backoff_seconds=900",
+                    company_name,
+                    status_code,
+                    body,
+                )
+                return []
+
+            if status_code == 429:
+                cache.set(APOLLO_BACKOFF_CACHE_KEY, status_code, timeout=300)
+                logger.warning(
+                    "apollo_search_rate_limited company=%s status=%s body=%s backoff_seconds=300",
+                    company_name,
+                    status_code,
+                    body,
+                )
+                return []
+
             logger.exception(
                 "apollo_search_failed company=%s status=%s",
                 company_name,
