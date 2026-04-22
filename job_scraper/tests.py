@@ -1,10 +1,12 @@
 from unittest.mock import Mock, patch
 
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 
 import requests
 
+from job_scraper.apollo_client import ApolloClient
 from job_scraper.api_scraper import ApiScraper
 from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
 from job_scraper.request_scraper import JobScraper
@@ -190,3 +192,43 @@ class ApiScraperLoggingTests(TestCase):
         log = ScraperExecutionLog.objects.first()
         self.assertIn("API Request Failed", log.error_message)
         self.assertEqual(log.scraper_type, "api")
+
+
+@override_settings(DEBUG_ENRICHMENT=False)
+class ApolloClientTests(TestCase):
+    @patch("job_scraper.apollo_client.requests.post")
+    def test_search_contacts_uses_api_search_then_bulk_match(self, post_mock):
+        search_response = Mock()
+        search_response.raise_for_status = Mock()
+        search_response.json.return_value = {
+            "people": [
+                {"id": "p1", "name": "Jane Doe", "title": "CTO"},
+                {"id": "p2", "name": "John Roe", "title": "CEO"},
+            ]
+        }
+
+        enrich_response = Mock()
+        enrich_response.raise_for_status = Mock()
+        enrich_response.json.return_value = {
+            "matches": [
+                {
+                    "id": "p1",
+                    "name": "Jane Doe",
+                    "title": "CTO",
+                    "email": "jane@example.com",
+                    "linkedin_url": "https://linkedin.com/in/jane",
+                    "phone_number": "+123",
+                }
+            ]
+        }
+
+        post_mock.side_effect = [search_response, enrich_response]
+        client = ApolloClient(api_key="test-key")
+
+        contacts = client.search_contacts("Acme")
+
+        self.assertEqual(len(contacts), 1)
+        self.assertEqual(contacts[0]["name"], "Jane Doe")
+        self.assertEqual(post_mock.call_count, 2)
+        self.assertIn("mixed_people/api_search", post_mock.call_args_list[0].args[0])
+        self.assertIn("people/bulk_match", post_mock.call_args_list[1].args[0])
