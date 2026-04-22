@@ -78,13 +78,29 @@ class CustomWebsite(models.Model):
         help_text="Use high-protection stealth browser (Playwright) for this site",
     )
     # API Support
-    is_api = models.BooleanField(default=False, help_text="Set to true if this is a JSON API endpoint")
-    api_jobs_path = models.CharField(max_length=255, blank=True, help_text="Key path to the list of jobs (e.g. 'data')")
-    api_title_key = models.CharField(max_length=100, blank=True, help_text="JSON key for job title")
-    api_company_key = models.CharField(max_length=100, blank=True, help_text="JSON key for company")
-    api_location_key = models.CharField(max_length=100, blank=True, help_text="JSON key for location")
-    api_description_key = models.CharField(max_length=100, blank=True, help_text="JSON key for description")
-    api_url_key = models.CharField(max_length=100, blank=True, help_text="JSON key for job URL")
+    is_api = models.BooleanField(
+        default=False, help_text="Set to true if this is a JSON API endpoint"
+    )
+    api_jobs_path = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Key path to the list of jobs (e.g. 'data')",
+    )
+    api_title_key = models.CharField(
+        max_length=100, blank=True, help_text="JSON key for job title"
+    )
+    api_company_key = models.CharField(
+        max_length=100, blank=True, help_text="JSON key for company"
+    )
+    api_location_key = models.CharField(
+        max_length=100, blank=True, help_text="JSON key for location"
+    )
+    api_description_key = models.CharField(
+        max_length=100, blank=True, help_text="JSON key for description"
+    )
+    api_url_key = models.CharField(
+        max_length=100, blank=True, help_text="JSON key for job URL"
+    )
 
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -110,7 +126,9 @@ class Contact(models.Model):
     class Meta:
         ordering = ["-created_at"]
         constraints = [
-            models.UniqueConstraint(fields=['job', 'name'], name='unique_job_contact_name')
+            models.UniqueConstraint(
+                fields=["job", "name"], name="unique_job_contact_name"
+            )
         ]
 
     def __str__(self):
@@ -119,22 +137,30 @@ class Contact(models.Model):
 
 class ScraperExecutionLog(models.Model):
     """Logs the execution of the scraper, including success, errors, and debug artifacts"""
-    
+
     SCRAPER_CHOICES = [
-        ('requests', 'Standard (Requests)'),
-        ('playwright', 'Stealth (Playwright)'),
-        ('api', 'JSON API'),
+        ("requests", "Standard (Requests)"),
+        ("playwright", "Stealth (Playwright)"),
+        ("api", "JSON API"),
     ]
-    
-    website = models.ForeignKey(CustomWebsite, on_delete=models.CASCADE, related_name="execution_logs")
-    scraper_type = models.CharField(max_length=20, choices=SCRAPER_CHOICES, default='requests')
+
+    website = models.ForeignKey(
+        CustomWebsite, on_delete=models.CASCADE, related_name="execution_logs"
+    )
+    scraper_type = models.CharField(
+        max_length=20, choices=SCRAPER_CHOICES, default="requests"
+    )
     timestamp = models.DateTimeField(auto_now_add=True)
     jobs_found = models.IntegerField(default=0)
     error_message = models.TextField(blank=True)
-    
+
     # Debug telemetry
-    screenshot = models.FileField(upload_to="artifacts/screenshots/", blank=True, null=True)
-    html_dump = models.FileField(upload_to="artifacts/html_dumps/", blank=True, null=True)
+    screenshot = models.FileField(
+        upload_to="artifacts/screenshots/", blank=True, null=True
+    )
+    html_dump = models.FileField(
+        upload_to="artifacts/html_dumps/", blank=True, null=True
+    )
 
     class Meta:
         ordering = ["-timestamp"]

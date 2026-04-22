@@ -1,16 +1,17 @@
 import logging
 import time
+import uuid
 from datetime import datetime
 from typing import List
-import uuid
-
-import requests
 
 from django.core.files.base import ContentFile
 
-from .models import Job, CustomWebsite, ScraperExecutionLog
+import requests
+
+from .models import CustomWebsite, Job, ScraperExecutionLog
 
 logger = logging.getLogger(__name__)
+
 
 class ApiScraper:
     """
@@ -40,7 +41,9 @@ class ApiScraper:
 
         try:
             # Build URL - APIs often use simple query params
-            url = website.search_url.format(keywords=keywords, location=location, page=1)
+            url = website.search_url.format(
+                keywords=keywords, location=location, page=1
+            )
 
             logger.info(
                 "api_fetch_start run_id=%s website_id=%s url=%s",
@@ -75,8 +78,12 @@ class ApiScraper:
                             job_data = {
                                 "title": self._get_val(item, website.api_title_key),
                                 "company": self._get_val(item, website.api_company_key),
-                                "location": self._get_val(item, website.api_location_key),
-                                "description": self._get_val(item, website.api_description_key),
+                                "location": self._get_val(
+                                    item, website.api_location_key
+                                ),
+                                "description": self._get_val(
+                                    item, website.api_description_key
+                                ),
                                 "source_url": self._get_val(item, website.api_url_key),
                             }
 
@@ -85,9 +92,13 @@ class ApiScraper:
                                 continue
 
                             # Filter by keywords in memory if necessary
-                            if keywords_lower and keywords_lower not in (
-                                job_data["title"] + job_data["description"]
-                            ).lower():
+                            if (
+                                keywords_lower
+                                and keywords_lower
+                                not in (
+                                    job_data["title"] + job_data["description"]
+                                ).lower()
+                            ):
                                 continue
 
                             all_new_jobs.append(

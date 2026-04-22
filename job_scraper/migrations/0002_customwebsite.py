@@ -6,32 +6,40 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('job_scraper', '0001_initial'),
+        ("job_scraper", "0001_initial"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='CustomWebsite',
+            name="CustomWebsite",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.CharField(max_length=100)),
-                ('base_url', models.URLField()),
-                ('search_url', models.URLField()),
-                ('job_list_selector', models.CharField(max_length=200)),
-                ('title_selector', models.CharField(max_length=200)),
-                ('company_selector', models.CharField(max_length=200)),
-                ('location_selector', models.CharField(max_length=200)),
-                ('salary_selector', models.CharField(blank=True, max_length=200)),
-                ('date_selector', models.CharField(blank=True, max_length=200)),
-                ('job_link_selector', models.CharField(max_length=200)),
-                ('apply_link_selector', models.CharField(blank=True, max_length=200)),
-                ('description_selector', models.CharField(blank=True, max_length=200)),
-                ('requirements_selector', models.CharField(blank=True, max_length=200)),
-                ('is_active', models.BooleanField(default=True)),
-                ('created_at', models.DateTimeField(auto_now_add=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.CharField(max_length=100)),
+                ("base_url", models.URLField()),
+                ("search_url", models.URLField()),
+                ("job_list_selector", models.CharField(max_length=200)),
+                ("title_selector", models.CharField(max_length=200)),
+                ("company_selector", models.CharField(max_length=200)),
+                ("location_selector", models.CharField(max_length=200)),
+                ("salary_selector", models.CharField(blank=True, max_length=200)),
+                ("date_selector", models.CharField(blank=True, max_length=200)),
+                ("job_link_selector", models.CharField(max_length=200)),
+                ("apply_link_selector", models.CharField(blank=True, max_length=200)),
+                ("description_selector", models.CharField(blank=True, max_length=200)),
+                ("requirements_selector", models.CharField(blank=True, max_length=200)),
+                ("is_active", models.BooleanField(default=True)),
+                ("created_at", models.DateTimeField(auto_now_add=True)),
             ],
             options={
-                'ordering': ['name'],
+                "ordering": ["name"],
             },
         ),
     ]

@@ -34,6 +34,7 @@ class Command(BaseCommand):
         )
 
         from job_scraper.request_scraper import JobScraper
+
         scraper = JobScraper()
         new_jobs = scraper.get_recent_jobs(location, keywords, max_pages=1)
 
@@ -53,7 +54,9 @@ class Command(BaseCommand):
                 enriched_count += count
                 self.stdout.write(f"Enriched {job.company} with {count} contacts.")
             except Exception as e:
-                logger.exception("apollo_enrichment_failed job_id=%s company=%s", job.id, job.company)
+                logger.exception(
+                    "apollo_enrichment_failed job_id=%s company=%s", job.id, job.company
+                )
                 self.stderr.write(
                     self.style.ERROR(f"Failed to enrich {job.company}: {e}")
                 )

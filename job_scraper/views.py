@@ -3,8 +3,10 @@ import threading
 from urllib.parse import urlencode
 
 from django.conf import settings
+from django.core.cache import cache
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db import connection
 from django.db.models import Q
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,6 +19,16 @@ from .request_scraper import JobScraper
 logger = logging.getLogger(__name__)
 
 RESULTS_PER_PAGE = 10
+
+COUNTRY_ALIASES = {
+    "us": "United States",
+    "usa": "United States",
+    "united states": "United States",
+    "uk": "United Kingdom",
+    "gb": "United Kingdom",
+    "united kingdom": "United Kingdom",
+    "uae": "United Arab Emirates",
+}
 
 
 def dashboard(request: HttpRequest):
@@ -32,6 +44,22 @@ def dashboard(request: HttpRequest):
         if isinstance(val, list):
             return val
         return [v.strip() for v in val.split(",") if v.strip()]
+
+    def apply_case_insensitive_in_filter(qs, field, values):
+        query = Q()
+        for value in values:
+            query |= Q(**{f"{field}__iexact": value})
+        return qs.filter(query)
+
+    def normalize_country_filters(values):
+        normalized = []
+        for value in values:
+            lowered = value.strip().lower()
+            canonical = COUNTRY_ALIASES.get(lowered)
+            if canonical:
+                normalized.append(canonical)
+            normalized.append(value.strip())
+        return [value for value in normalized if value]
 
     continents = parse_filter(request.GET.get("continents"))
     countries = parse_filter(request.GET.get("countries"))
@@ -50,11 +78,14 @@ def dashboard(request: HttpRequest):
             source_id = ""
 
     if continents:
-        queryset = queryset.filter(continent__in=continents)
+        queryset = apply_case_insensitive_in_filter(queryset, "continent", continents)
     if countries:
-        queryset = queryset.filter(country__in=countries)
+        country_filters = normalize_country_filters(countries)
+        queryset = apply_case_insensitive_in_filter(
+            queryset, "country", country_filters
+        )
     if industries:
-        queryset = queryset.filter(industry__in=industries)
+        queryset = apply_case_insensitive_in_filter(queryset, "industry", industries)
     if expertise:
         queryset = queryset.filter(expertise_tags__icontains=expertise)
     if is_rfp:
@@ -117,7 +148,21 @@ def trigger_scrape(request: HttpRequest):
     Manually triggers the consolidated scraper.
     """
     keywords = request.POST.get("q", "software contract")
-    location = request.POST.get("countries") or request.POST.get("continents") or "us"
+    country_filters = [
+        item.strip()
+        for item in request.POST.get("countries", "").split(",")
+        if item.strip()
+    ]
+    continent_filters = [
+        item.strip()
+        for item in request.POST.get("continents", "").split(",")
+        if item.strip()
+    ]
+    location = (
+        country_filters[0]
+        if country_filters
+        else (continent_filters[0] if continent_filters else "us")
+    )
     source_id = request.POST.get("source_id")
 
     website_id = None
@@ -184,7 +229,55 @@ def trigger_scrape(request: HttpRequest):
 def job_detail(request: HttpRequest, job_id: int):
     try:
         job = get_object_or_404(Job, pk=job_id)
-        return render(request, "job_scraper/job_detail.html", {"job": job})
+        enrichment_state = "idle"
+
+        if not job.contacts.exists():
+            from .apollo_client import ApolloClient
+
+            apollo = ApolloClient()
+            lock_key = f"job_enrichment_lock_{job.id}"
+            completed_key = f"job_enrichment_completed_{job.id}"
+
+            if not apollo.debug_mode and not apollo.api_key:
+                enrichment_state = "unavailable"
+            elif connection.in_atomic_block:
+                enrichment_state = "idle"
+            elif cache.get(completed_key):
+                enrichment_state = "idle"
+            else:
+                if cache.add(lock_key, True, timeout=300):
+                    enrichment_state = "running"
+
+                    def run_enrichment(target_job_id):
+                        try:
+                            target_job = Job.objects.get(pk=target_job_id)
+                            count = ApolloClient().enrich_job_contacts(target_job)
+                            logger.info(
+                                "job_detail_enrichment_done job_id=%s contacts=%s",
+                                target_job_id,
+                                count,
+                            )
+                        except Exception:
+                            logger.exception(
+                                "job_detail_enrichment_failed job_id=%s", target_job_id
+                            )
+                        finally:
+                            cache.set(completed_key, True, timeout=900)
+                            cache.delete(lock_key)
+
+                    thread = threading.Thread(target=run_enrichment, args=(job.id,))
+                    thread.start()
+                else:
+                    enrichment_state = "pending"
+
+        return render(
+            request,
+            "job_scraper/job_detail.html",
+            {
+                "job": job,
+                "enrichment_state": enrichment_state,
+            },
+        )
 
     except Exception:
         logger.exception("job_detail_fetch_failed job_id=%s", job_id)

@@ -2,9 +2,10 @@ import logging
 import os
 
 from django.conf import settings
-from .models import Contact
 
 import requests
+
+from .models import Contact
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,6 @@ class ApolloClient:
 
         endpoint = f"{self.base_url}/mixed_people/search"
         payload = {
-            "api_key": self.api_key,
             "q_organization_names": company_name,
             "person_titles": titles
             or ["CEO", "CTO", "Head of Engineering", "VP Sales"],
@@ -49,10 +49,16 @@ class ApolloClient:
             "per_page": 5,
         }
 
-        headers = {"Content-Type": "application/json", "Cache-Control": "no-cache"}
+        headers = {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "X-Api-Key": self.api_key,
+        }
 
         try:
-            response = requests.post(endpoint, json=payload, headers=headers, timeout=10)
+            response = requests.post(
+                endpoint, json=payload, headers=headers, timeout=10
+            )
             response.raise_for_status()
             data = response.json()
 
@@ -69,6 +75,24 @@ class ApolloClient:
                 )
             return contacts
 
+        except requests.HTTPError as exc:
+            response = exc.response
+            status_code = response.status_code if response is not None else None
+            if status_code == 422:
+                body = response.text[:500] if response is not None else ""
+                logger.warning(
+                    "apollo_search_unprocessable company=%s status=%s body=%s",
+                    company_name,
+                    status_code,
+                    body,
+                )
+                return []
+            logger.exception(
+                "apollo_search_failed company=%s status=%s",
+                company_name,
+                status_code,
+            )
+            return []
         except Exception:
             logger.exception("apollo_search_failed company=%s", company_name)
             return []
@@ -77,7 +101,11 @@ class ApolloClient:
         """
         Find and save contacts for a given job.
         """
-        if not job.company or job.company.strip().lower() in ["not available", "unknown", ""]:
+        if not job.company or job.company.strip().lower() in [
+            "not available",
+            "unknown",
+            "",
+        ]:
             logger.warning(
                 "apollo_enrichment_skipped job_id=%s reason=missing_company",
                 job.id,

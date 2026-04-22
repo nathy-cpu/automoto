@@ -75,7 +75,11 @@ class JobScraper:
                     website.id,
                     website.name,
                     len(jobs),
-                    "api" if website.is_api else ("selenium_stealth" if website.use_stealth else "requests"),
+                    (
+                        "api"
+                        if website.is_api
+                        else ("selenium_stealth" if website.use_stealth else "requests")
+                    ),
                 )
 
             except Exception:
@@ -155,7 +159,9 @@ class JobScraper:
 
                             # Apply heuristic parsing
                             description = job_data.get("description", "")
-                            job_data = self._enrich_job_data(job_data, description, keywords)
+                            job_data = self._enrich_job_data(
+                                job_data, description, keywords
+                            )
 
                             # Create/Update the Job model instance
                             job, created = Job.objects.update_or_create(
@@ -169,7 +175,9 @@ class JobScraper:
                                     "continent": job_data.get("continent", ""),
                                     "salary": job_data.get("salary", ""),
                                     "job_type": job_data.get("job_type", ""),
-                                    "experience_level": job_data.get("experience_level", ""),
+                                    "experience_level": job_data.get(
+                                        "experience_level", ""
+                                    ),
                                     "industry": job_data.get("industry", ""),
                                     "posted_date": None,  # Parsing dates generically is hard, we'll use created_at
                                     "source_website": website.name,
@@ -209,9 +217,11 @@ class JobScraper:
                 error_msg = str(e)
                 break
 
-        from .models import ScraperExecutionLog
-        from django.core.files.base import ContentFile
         from datetime import datetime
+
+        from django.core.files.base import ContentFile
+
+        from .models import ScraperExecutionLog
 
         # Check for silent failures
         if parsed_jobs_count == 0 and not error_msg:
@@ -219,13 +229,17 @@ class JobScraper:
 
         log = ScraperExecutionLog.objects.create(
             website=website,
-            scraper_type='requests',
+            scraper_type="requests",
             jobs_found=parsed_jobs_count,
             error_message=error_msg,
         )
         if html_content:
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            log.html_dump.save(f"{website.name}_error_{timestamp_str}.html", ContentFile(html_content.encode('utf-8')), save=True)
+            log.html_dump.save(
+                f"{website.name}_error_{timestamp_str}.html",
+                ContentFile(html_content.encode("utf-8")),
+                save=True,
+            )
 
         logger.info(
             "requests_scrape_done website_id=%s website=%s jobs_new=%s duration_ms=%s has_error=%s",
@@ -237,6 +251,7 @@ class JobScraper:
         )
 
         return jobs
+
     def _get_custom_details(self, job_url: str, website: CustomWebsite) -> Dict:
         """Fetch job detail page using custom selectors"""
         try:
@@ -344,22 +359,71 @@ class JobScraper:
 
     def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
         """Apply heuristic parsing to fill in missing fields."""
-        
+
         # 1. Location parsing (City, Country, Continent)
         loc_text = job_data.get("location", "")
         city = ""
         country = ""
         continent = ""
-        
+
         US_STATES = [
-            "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
+            "AL",
+            "AK",
+            "AZ",
+            "AR",
+            "CA",
+            "CO",
+            "CT",
+            "DE",
+            "FL",
+            "GA",
+            "HI",
+            "ID",
+            "IL",
+            "IN",
+            "IA",
+            "KS",
+            "KY",
+            "LA",
+            "ME",
+            "MD",
+            "MA",
+            "MI",
+            "MN",
+            "MS",
+            "MO",
+            "MT",
+            "NE",
+            "NV",
+            "NH",
+            "NJ",
+            "NM",
+            "NY",
+            "NC",
+            "ND",
+            "OH",
+            "OK",
+            "OR",
+            "PA",
+            "RI",
+            "SC",
+            "SD",
+            "TN",
+            "TX",
+            "UT",
+            "VT",
+            "VA",
+            "WA",
+            "WV",
+            "WI",
+            "WY",
         ]
 
         if loc_text:
             loc_upper = loc_text.upper()
             # Direct matches for broad regions
             if "EUROPE" in loc_upper:
-                country = "United Kingdom" # Fallback country to help continent mapping
+                country = "United Kingdom"  # Fallback country to help continent mapping
                 continent = "Europe"
             elif "EMEA" in loc_upper:
                 continent = "Europe"
@@ -371,18 +435,23 @@ class JobScraper:
                 city = parts[0]
                 # Check if last part is a US state or "USA"
                 last_part = parts[-1].upper()
-                if last_part in US_STATES or last_part == "USA" or last_part == "UNITED STATES":
+                if (
+                    last_part in US_STATES
+                    or last_part == "USA"
+                    or last_part == "UNITED STATES"
+                ):
                     country = "United States"
                     continent = "North America"
                 else:
                     country = parts[-1]
             else:
                 country = loc_text.strip()
-        
+
         if not continent:
             from .utils import get_continent_from_country
+
             continent = get_continent_from_country(country) if country else "Unknown"
-        
+
         job_data["city"] = city
         job_data["country"] = country
         job_data["continent"] = continent
@@ -390,62 +459,75 @@ class JobScraper:
         # 2. Requirements fallback
         if not job_data.get("requirements") and description:
             job_data["requirements"] = self._extract_requirements(description)
-            
+
         # 3. Salary fallback
         if not job_data.get("salary") and description:
             job_data["salary"] = self._extract_salary_fallback(description)
-            
+
         # 4. Job type & experience
         job_data["job_type"] = self._extract_job_type(description)
         job_data["experience_level"] = self._extract_experience_level(description)
         job_data["industry"] = self._extract_industry(description)
-        
+
         return job_data
 
     def _extract_salary_fallback(self, description: str) -> str:
         """Find salary patterns in text like $100,000 - $120,000"""
         salary_pattern = re.compile(
             r"(\$[\d,]+(?:\.\d{2})?(?:\s*(?:-|to)\s*\$[\d,]+(?:\.\d{2})?)?(?:\s*(?:a|per|/)\s*(?:year|yr|month|mo|hour|hr|week|wk|annually|k))?)",
-            re.IGNORECASE
+            re.IGNORECASE,
         )
         match = salary_pattern.search(description)
         if match:
             return match.group(1)
-        
+
         # Look for EUR/GBP as well
         alt_pattern = re.compile(
             r"((?:€|£)[\d,]+(?:\.\d{2})?(?:\s*(?:-|to)\s*(?:€|£)[\d,]+(?:\.\d{2})?)?(?:\s*(?:a|per|/)\s*(?:year|yr|month|mo|hour|hr|week|wk|annually|k))?)",
-            re.IGNORECASE
+            re.IGNORECASE,
         )
         alt_match = alt_pattern.search(description)
         if alt_match:
             return alt_match.group(1)
-            
+
         return ""
 
     def _extract_requirements(self, description: str) -> str:
         """Extract requirements from job description"""
         requirements_keywords = [
-            "requirements", "qualifications", "skills", "experience",
-            "must have", "should have", "preferred", "minimum",
-            "what you need", "what you'll bring", "what we are looking for",
-            "what we're looking for", "your profile", "who you are"
+            "requirements",
+            "qualifications",
+            "skills",
+            "experience",
+            "must have",
+            "should have",
+            "preferred",
+            "minimum",
+            "what you need",
+            "what you'll bring",
+            "what we are looking for",
+            "what we're looking for",
+            "your profile",
+            "who you are",
         ]
 
         lines = description.split("\n")
         requirements_lines = []
         in_requirements = False
-        
+
         for line in lines:
             line_lower = line.lower()
-            
+
             # Stop if we hit benefits or other sections
-            if any(k in line_lower for k in ["benefits", "what we offer", "perks", "equal opportunity"]):
+            if any(
+                k in line_lower
+                for k in ["benefits", "what we offer", "perks", "equal opportunity"]
+            ):
                 in_requirements = False
 
             if any(keyword in line_lower for keyword in requirements_keywords):
                 in_requirements = True
-                continue # Skip the header line itself
+                continue  # Skip the header line itself
 
             if in_requirements and line.strip():
                 if line.strip().startswith(("•", "-", "*", "·", "✓", "o ")):
@@ -458,7 +540,12 @@ class JobScraper:
     def _extract_job_type(self, description: str) -> str:
         """Extract job type from description"""
         job_types = [
-            "full-time", "part-time", "contract", "temporary", "internship", "freelance"
+            "full-time",
+            "part-time",
+            "contract",
+            "temporary",
+            "internship",
+            "freelance",
         ]
         description_lower = description.lower()
         for job_type in job_types:
@@ -483,9 +570,18 @@ class JobScraper:
     def _extract_industry(self, description: str) -> str:
         """Extract industry from description"""
         industries = [
-            "technology", "healthcare", "finance", "education", "retail",
-            "manufacturing", "consulting", "marketing", "sales", "engineering",
-            "software", "logistics"
+            "technology",
+            "healthcare",
+            "finance",
+            "education",
+            "retail",
+            "manufacturing",
+            "consulting",
+            "marketing",
+            "sales",
+            "engineering",
+            "software",
+            "logistics",
         ]
         description_lower = description.lower()
         for industry in industries:

@@ -156,8 +156,14 @@
                             </div>
                             {% empty %}
                             <div class="empty-contacts">
+                                {% if enrichment_state == "running" or enrichment_state == "pending" %}
                                 <div class="scanning-loader"></div>
-                                <p>Enrichment in progress...</p>
+                                <p>Enrichment in progress... refreshing soon.</p>
+                                {% elif enrichment_state == "unavailable" %}
+                                <p>Contact enrichment unavailable. Configure `APOLLO_API_KEY` or enable `DEBUG_ENRICHMENT`.</p>
+                                {% else %}
+                                <p>No contacts found yet.</p>
+                                {% endif %}
                             </div>
                             {% endfor %}
                         </div>
@@ -177,6 +183,13 @@
     <footer class="detail-footer">
         &copy; 2026 AutoMoto Sales Professional Tool
     </footer>
+    {% if enrichment_state == "running" or enrichment_state == "pending" %}
+    <script>
+        setTimeout(function () {
+            window.location.reload();
+        }, 5000);
+    </script>
+    {% endif %}
 </body>
 
 </html> 

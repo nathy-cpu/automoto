@@ -1,8 +1,9 @@
 from unittest.mock import Mock, patch
 
-import requests
 from django.test import TestCase
 from django.urls import reverse
+
+import requests
 
 from job_scraper.api_scraper import ApiScraper
 from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
@@ -53,6 +54,7 @@ class DashboardViewTests(TestCase):
             title="Backend Engineer",
             company="Acme",
             location="Remote",
+            country="United States",
             description="Python and Django",
             source_website="Indeed",
         )
@@ -60,6 +62,7 @@ class DashboardViewTests(TestCase):
             title="Data Engineer",
             company="Beta",
             location="Berlin",
+            country="Germany",
             description="Spark and SQL",
             source_website="LinkedIn",
         )
@@ -69,7 +72,18 @@ class DashboardViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["jobs"].paginator.count, 1)
-        self.assertEqual(response.context["jobs"].object_list[0].source_website, "Indeed")
+        self.assertEqual(
+            response.context["jobs"].object_list[0].source_website, "Indeed"
+        )
+
+    def test_dashboard_country_filter_matches_common_alias(self):
+        response = self.client.get(reverse("dashboard"), {"countries": "us"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["jobs"].paginator.count, 1)
+        self.assertEqual(
+            response.context["jobs"].object_list[0].country, "United States"
+        )
 
 
 class TriggerScrapeViewTests(TestCase):
