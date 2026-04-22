@@ -1,4 +1,5 @@
 import logging
+import time
 
 from django.core.management.base import BaseCommand
 
@@ -16,9 +17,17 @@ class Command(BaseCommand):
         parser.add_argument("--limit", type=int, default=10)
 
     def handle(self, *args, **options):
+        started_at = time.monotonic()
         keywords = options["keywords"]
         location = options["location"]
         limit = options["limit"]
+
+        logger.info(
+            "run_scraper_start keywords=%s location=%s limit=%s",
+            keywords,
+            location,
+            limit,
+        )
 
         self.stdout.write(
             self.style.SUCCESS(f"Starting scraper for '{keywords}' in '{location}'...")
@@ -44,6 +53,7 @@ class Command(BaseCommand):
                 enriched_count += count
                 self.stdout.write(f"Enriched {job.company} with {count} contacts.")
             except Exception as e:
+                logger.exception("apollo_enrichment_failed job_id=%s company=%s", job.id, job.company)
                 self.stderr.write(
                     self.style.ERROR(f"Failed to enrich {job.company}: {e}")
                 )
@@ -52,4 +62,10 @@ class Command(BaseCommand):
             self.style.SUCCESS(
                 f"Run complete. {len(new_jobs)} jobs processed, {enriched_count} contacts found."
             )
+        )
+        logger.info(
+            "run_scraper_done jobs_new=%s contacts_found=%s duration_ms=%s",
+            len(new_jobs),
+            enriched_count,
+            int((time.monotonic() - started_at) * 1000),
         )

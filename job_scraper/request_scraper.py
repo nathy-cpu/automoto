@@ -2,6 +2,7 @@ import logging
 import random
 import re
 import time
+import uuid
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
@@ -32,10 +33,21 @@ class JobScraper:
         website_id: Optional[int] = None,
     ) -> List[Job]:
         """Get recent job postings from active custom websites"""
+        run_id = uuid.uuid4().hex[:8]
+        start_time = time.monotonic()
         all_new_jobs = []
         active_websites = CustomWebsite.objects.filter(is_active=True)
         if website_id:
             active_websites = active_websites.filter(id=website_id)
+
+        logger.info(
+            "scrape_run_start run_id=%s websites=%s country=%s max_pages=%s website_id=%s",
+            run_id,
+            active_websites.count(),
+            country,
+            max_pages,
+            website_id,
+        )
 
         for website in active_websites:
             try:
@@ -57,11 +69,30 @@ class JobScraper:
                     )
                     all_new_jobs.extend(jobs)
 
-                logger.info(f"Scraped {len(jobs)} jobs from {website.name}")
+                logger.info(
+                    "scrape_website_done run_id=%s website_id=%s website=%s jobs_new=%s scraper=%s",
+                    run_id,
+                    website.id,
+                    website.name,
+                    len(jobs),
+                    "api" if website.is_api else ("selenium_stealth" if website.use_stealth else "requests"),
+                )
 
-            except Exception as e:
-                logger.error(f"Error scraping {website.name}: {e}")
+            except Exception:
+                logger.exception(
+                    "scrape_website_failed run_id=%s website_id=%s website=%s",
+                    run_id,
+                    website.id,
+                    website.name,
+                )
                 continue
+
+        logger.info(
+            "scrape_run_done run_id=%s total_jobs_new=%s duration_ms=%s",
+            run_id,
+            len(all_new_jobs),
+            int((time.monotonic() - start_time) * 1000),
+        )
 
         return all_new_jobs
 
@@ -73,6 +104,7 @@ class JobScraper:
         max_pages: int,
     ) -> List[Job]:
         """Scrape custom website using stored selectors (Requests version)"""
+        started_at = time.monotonic()
         jobs = []
         error_msg = ""
         html_content = ""
@@ -155,16 +187,25 @@ class JobScraper:
                             parsed_jobs_count += 1
                             if created:
                                 jobs.append(job)
-                    except Exception as e:
-                        logger.error(
-                            f"Error parsing custom job card on {website.name}: {e}"
+                    except Exception:
+                        logger.exception(
+                            "card_parse_failed website_id=%s website=%s page=%s card=%s",
+                            website.id,
+                            website.name,
+                            page + 1,
+                            card_number,
                         )
                         continue
 
                 time.sleep(random.uniform(1, 3))
 
             except Exception as e:
-                logger.error(f"Error scraping {website.name} page {page}: {e}")
+                logger.exception(
+                    "page_scrape_failed website_id=%s website=%s page=%s",
+                    website.id,
+                    website.name,
+                    page + 1,
+                )
                 error_msg = str(e)
                 break
 
@@ -185,6 +226,15 @@ class JobScraper:
         if html_content:
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
             log.html_dump.save(f"{website.name}_error_{timestamp_str}.html", ContentFile(html_content.encode('utf-8')), save=True)
+
+        logger.info(
+            "requests_scrape_done website_id=%s website=%s jobs_new=%s duration_ms=%s has_error=%s",
+            website.id,
+            website.name,
+            len(jobs),
+            int((time.monotonic() - started_at) * 1000),
+            bool(error_msg),
+        )
 
         return jobs
     def _get_custom_details(self, job_url: str, website: CustomWebsite) -> Dict:
@@ -219,8 +269,13 @@ class JobScraper:
                 "requirements": requirements,
                 "application_link": application_link or job_url,
             }
-        except Exception as e:
-            logger.error(f"Error fetching custom details from {job_url}: {e}")
+        except Exception:
+            logger.exception(
+                "detail_fetch_failed website_id=%s website=%s job_url=%s",
+                website.id,
+                website.name,
+                job_url,
+            )
             return {}
 
     def _parse_custom_card(
@@ -277,8 +332,14 @@ class JobScraper:
                 "job_url": job_url,
             }
 
-        except Exception as e:
-            logger.error(f"Error parsing custom card: {e}")
+        except Exception:
+            logger.exception(
+                "card_parse_exception website_id=%s website=%s page=%s card=%s",
+                custom_website.id,
+                custom_website.name,
+                page_number,
+                card_number,
+            )
             return None
 
     def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:

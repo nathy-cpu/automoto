@@ -1,6 +1,8 @@
 import logging
+import time
 from datetime import datetime
 from typing import List
+import uuid
 
 import requests
 
@@ -20,6 +22,8 @@ class ApiScraper:
         """
         Fetch jobs from a JSON API endpoint and map keys to Job model.
         """
+        run_id = uuid.uuid4().hex[:8]
+        started_at = time.monotonic()
         all_new_jobs = []
         saved_jobs = []
         error_msg = ""
@@ -27,11 +31,23 @@ class ApiScraper:
         keywords = (keywords or "").strip()
         location = (location or "").strip()
 
+        logger.info(
+            "api_scrape_start run_id=%s website_id=%s website=%s",
+            run_id,
+            website.id,
+            website.name,
+        )
+
         try:
             # Build URL - APIs often use simple query params
             url = website.search_url.format(keywords=keywords, location=location, page=1)
 
-            logger.info(f"Fetching API data from {url}")
+            logger.info(
+                "api_fetch_start run_id=%s website_id=%s url=%s",
+                run_id,
+                website.id,
+                url,
+            )
             response = requests.get(url, timeout=30)
 
             try:
@@ -91,12 +107,21 @@ class ApiScraper:
                                 }
                             )
 
-                        except Exception as e:
-                            logger.error(f"Error parsing API item: {e}")
+                        except Exception:
+                            logger.exception(
+                                "api_item_parse_failed run_id=%s website_id=%s",
+                                run_id,
+                                website.id,
+                            )
 
         except Exception as e:
             error_msg = f"Unexpected API error: {e}"
-            logger.error(error_msg)
+            logger.exception(
+                "api_scrape_failed run_id=%s website_id=%s website=%s",
+                run_id,
+                website.id,
+                website.name,
+            )
 
         # Save results and log
         for j_data in all_new_jobs:
@@ -126,6 +151,17 @@ class ApiScraper:
                 ContentFile(json_dump.encode("utf-8")),
                 save=True,
             )
+
+        logger.info(
+            "api_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s",
+            run_id,
+            website.id,
+            website.name,
+            len(all_new_jobs),
+            len(saved_jobs),
+            int((time.monotonic() - started_at) * 1000),
+            bool(error_msg),
+        )
 
         return saved_jobs
 

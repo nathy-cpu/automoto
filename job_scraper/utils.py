@@ -1,4 +1,8 @@
+import logging
+
 import pycountry_convert as pc
+
+logger = logging.getLogger(__name__)
 
 
 def get_continent_from_country(country_name):
@@ -33,7 +37,7 @@ def get_continent_from_country(country_name):
 
                 country = pycountry.countries.search_fuzzy(country_name)[0]
                 country_code = country.alpha_2
-            except:
+            except Exception:
                 # Fallback: if it's already a 2-letter code, use it
                 if len(country_name) == 2:
                     country_code = country_name.upper()
@@ -43,5 +47,6 @@ def get_continent_from_country(country_name):
         continent_code = pc.country_alpha2_to_continent_code(country_code)
         continent_name = pc.convert_continent_code_to_continent_name(continent_code)
         return continent_name
-    except Exception as e:
+    except Exception:
+        logger.exception("continent_lookup_failed country=%s", country_name)
         return "Unknown"

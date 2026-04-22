@@ -128,8 +128,19 @@ def trigger_scrape(request: HttpRequest):
             pass
 
     scraper = JobScraper()
+    logger.info(
+        "manual_scrape_start website_id=%s location=%s keywords=%s",
+        website_id,
+        location,
+        keywords,
+    )
     new_jobs = scraper.get_recent_jobs(
         location, keywords, max_pages=1, website_id=website_id
+    )
+    logger.info(
+        "manual_scrape_done website_id=%s jobs_new=%s",
+        website_id,
+        len(new_jobs),
     )
 
     # Lead enrichment for new jobs
@@ -142,8 +153,8 @@ def trigger_scrape(request: HttpRequest):
             for job in jobs_list[:10]:  # Enrich up to 10 jobs
                 try:
                     apollo.enrich_job_contacts(job)
-                except Exception as e:
-                    logger.error(f"Background enrichment failed for job {job.id}: {e}")
+                except Exception:
+                    logger.exception("background_enrichment_failed job_id=%s", job.id)
 
         # Run in background to avoid hanging the UI
         thread = threading.Thread(target=run_enrichment, args=(new_jobs,))
@@ -175,8 +186,8 @@ def job_detail(request: HttpRequest, job_id: int):
         job = get_object_or_404(Job, pk=job_id)
         return render(request, "job_scraper/job_detail.html", {"job": job})
 
-    except Exception as e:
-        logger.error(f"Error fetching job details: {e}")
+    except Exception:
+        logger.exception("job_detail_fetch_failed job_id=%s", job_id)
         return render(
             request,
             "job_scraper/job_detail.html",

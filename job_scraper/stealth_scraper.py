@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 import time
 import random
 import logging
+import uuid
 from datetime import datetime
 from django.core.files.base import ContentFile
 from .models import CustomWebsite, Job, ScraperExecutionLog
@@ -29,6 +30,16 @@ class StealthScraper:
         """
         keywords = (keywords or "").strip()
         location = (location or "").strip()
+        run_id = uuid.uuid4().hex[:8]
+        started_at = time.monotonic()
+
+        logger.info(
+            "stealth_scrape_start run_id=%s website_id=%s website=%s max_pages=%s",
+            run_id,
+            website.id,
+            website.name,
+            max_pages,
+        )
 
         options = uc.ChromeOptions()
         if self.headless:
@@ -51,7 +62,13 @@ class StealthScraper:
                     keywords=keywords, location=location, page=page_num
                 )
                 try:
-                    logger.info(f"Navigating to {url}")
+                    logger.info(
+                        "stealth_page_start run_id=%s website_id=%s page=%s url=%s",
+                        run_id,
+                        website.id,
+                        page_num,
+                        url,
+                    )
                     driver.get(url)
 
                     time.sleep(random.uniform(3, 6))
@@ -61,32 +78,59 @@ class StealthScraper:
                         WebDriverWait(driver, 20).until(
                             EC.presence_of_element_located((By.CSS_SELECTOR, website.job_list_selector))
                         )
-                    except Exception as e:
-                        logger.warning(f"Timeout waiting for {website.job_list_selector}")
+                    except Exception:
+                        logger.warning(
+                            "selector_timeout run_id=%s website_id=%s website=%s selector=%s",
+                            run_id,
+                            website.id,
+                            website.name,
+                            website.job_list_selector,
+                        )
                         error_msg = "Timeout waiting for primary selector. Possible CAPTCHA wall."
                         try:
                             html_content = driver.page_source
                             screenshot_bytes = driver.get_screenshot_as_png()
-                        except:
-                            pass
+                        except Exception:
+                            logger.debug(
+                                "artifact_capture_failed run_id=%s website_id=%s",
+                                run_id,
+                                website.id,
+                                exc_info=True,
+                            )
                         break
 
                     # Check for CAPTCHA manually
                     content_lower = driver.page_source.lower()
                     if any(x in content_lower for x in ["recaptcha", "hcaptcha", "cloudflare"]):
-                        logger.error(f"Anti-bot detected on {website.name}")
+                        logger.error(
+                            "anti_bot_detected run_id=%s website_id=%s website=%s",
+                            run_id,
+                            website.id,
+                            website.name,
+                        )
                         error_msg = "Anti-bot (Cloudflare/CAPTCHA) detected."
                         try:
                             html_content = driver.page_source
                             screenshot_bytes = driver.get_screenshot_as_png()
-                        except:
-                            pass
+                        except Exception:
+                            logger.debug(
+                                "artifact_capture_failed run_id=%s website_id=%s",
+                                run_id,
+                                website.id,
+                                exc_info=True,
+                            )
                         break
 
                     # Parse with BeautifulSoup
                     soup = BeautifulSoup(driver.page_source, 'html.parser')
                     job_elements = soup.select(website.job_list_selector)
-                    logger.info(f"Found {len(job_elements)} job cards on {website.name}")
+                    logger.info(
+                        "stealth_page_cards_found run_id=%s website_id=%s page=%s cards=%s",
+                        run_id,
+                        website.id,
+                        page_num,
+                        len(job_elements),
+                    )
 
                     for element in job_elements:
                         try:
@@ -163,14 +207,30 @@ class StealthScraper:
                                 }
                             })
 
-                        except Exception as e:
-                            logger.error(f"Error parsing card on {website.name}: {e}")
+                        except Exception:
+                            logger.exception(
+                                "stealth_card_parse_failed run_id=%s website_id=%s website=%s",
+                                run_id,
+                                website.id,
+                                website.name,
+                            )
 
-                except Exception as e:
-                    logger.error(f"Page navigation failed for {website.name}: {e}")
+                except Exception:
+                    logger.exception(
+                        "stealth_page_failed run_id=%s website_id=%s website=%s page=%s",
+                        run_id,
+                        website.id,
+                        website.name,
+                        page_num,
+                    )
                     break
         except Exception as e:
-            logger.error(f"Failed to initialize or run undetected_chromedriver: {e}")
+            logger.exception(
+                "stealth_driver_failed run_id=%s website_id=%s website=%s",
+                run_id,
+                website.id,
+                website.name,
+            )
             error_msg = f"Driver Initialization/Execution Failed: {e}"
         finally:
             if driver:
@@ -207,6 +267,17 @@ class StealthScraper:
         if html_content:
             log.html_dump.save(f"{website.name}_error_{timestamp_str}.html", ContentFile(html_content.encode('utf-8')), save=True)
 
+        logger.info(
+            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s",
+            run_id,
+            website.id,
+            website.name,
+            len(all_new_jobs),
+            len(saved_jobs),
+            int((time.monotonic() - started_at) * 1000),
+            bool(error_msg),
+        )
+
         return saved_jobs
 
     def _get_description_selenium(self, driver, job_url, selector):
@@ -224,8 +295,13 @@ class StealthScraper:
                 WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.CSS_SELECTOR, selector))
                 )
-            except:
-                pass
+            except Exception:
+                logger.debug(
+                    "description_selector_wait_timeout selector=%s job_url=%s",
+                    selector,
+                    job_url,
+                    exc_info=True,
+                )
 
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             desc_elem = soup.select_one(selector)
@@ -242,14 +318,18 @@ class StealthScraper:
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
             return text.strip()
-        except Exception as e:
-            logger.error(f"Failed to get description for {job_url}: {e}")
+        except Exception:
+            logger.exception("description_fetch_failed job_url=%s", job_url)
             try:
                 if len(driver.window_handles) > 1:
                     driver.close()
                     driver.switch_to.window(driver.window_handles[0])
-            except:
-                pass
+            except Exception:
+                logger.debug(
+                    "description_tab_cleanup_failed job_url=%s",
+                    job_url,
+                    exc_info=True,
+                )
             return ""
 
     def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:

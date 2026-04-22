@@ -179,3 +179,69 @@ DEBUG_TOOLBAR_CONFIG = {
 
 # Django Admin Shell Settings
 ADMIN_SHELL_ONLY_SUPERUSER = True
+
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+DJANGO_LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "require_debug_true": {"()": "django.utils.log.RequireDebugTrue"},
+        "require_debug_false": {"()": "django.utils.log.RequireDebugFalse"},
+    },
+    "formatters": {
+        "dev": {
+            "format": "[%(asctime)s] %(levelname)s %(name)s:%(lineno)d - %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+        "prod": {
+            "format": (
+                "ts=%(asctime)s level=%(levelname)s logger=%(name)s "
+                "line=%(lineno)d module=%(module)s func=%(funcName)s msg=%(message)s"
+            ),
+            "datefmt": "%Y-%m-%dT%H:%M:%S%z",
+        },
+    },
+    "handlers": {
+        "console_dev": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "filters": ["require_debug_true"],
+            "formatter": "dev",
+        },
+        "console_prod": {
+            "class": "logging.StreamHandler",
+            "level": LOG_LEVEL,
+            "filters": ["require_debug_false"],
+            "formatter": "prod",
+        },
+    },
+    "root": {
+        "handlers": ["console_dev", "console_prod"],
+        "level": LOG_LEVEL,
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console_dev", "console_prod"],
+            "level": DJANGO_LOG_LEVEL,
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console_dev", "console_prod"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+        "job_scraper": {
+            "handlers": ["console_dev", "console_prod"],
+            "level": LOG_LEVEL,
+            "propagate": False,
+        },
+        "apscheduler": {
+            "handlers": ["console_dev", "console_prod"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

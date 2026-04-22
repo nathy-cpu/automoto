@@ -21,8 +21,8 @@ def run_scraper_task():
             "run_scraper", keywords="software contract", location="us", limit=20
         )
         call_command("run_scraper", keywords="it rfp", location="uk", limit=20)
-    except Exception as e:
-        logger.error(f"Scheduled task failed: {e}")
+    except Exception:
+        logger.exception("scheduled_scraper_task_failed")
 
 
 @util.close_old_connections

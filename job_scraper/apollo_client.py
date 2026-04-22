@@ -24,7 +24,7 @@ class ApolloClient:
         Search for contacts in a company.
         """
         if self.debug_mode:
-            logger.info(f"[DEBUG MODE] Mocking contact search for {company_name}")
+            logger.info("apollo_debug_mock_search company=%s", company_name)
             return [
                 {
                     "name": "Jane Doe",
@@ -69,8 +69,8 @@ class ApolloClient:
                 )
             return contacts
 
-        except Exception as e:
-            logger.error(f"Apollo search failed: {e}")
+        except Exception:
+            logger.exception("apollo_search_failed company=%s", company_name)
             return []
 
     def enrich_job_contacts(self, job):
@@ -78,7 +78,10 @@ class ApolloClient:
         Find and save contacts for a given job.
         """
         if not job.company or job.company.strip().lower() in ["not available", "unknown", ""]:
-            logger.warning(f"Skipping Apollo enrichment for job {job.id}: No valid company name.")
+            logger.warning(
+                "apollo_enrichment_skipped job_id=%s reason=missing_company",
+                job.id,
+            )
             return 0
 
         contacts_data = self.search_contacts(job.company, job.location)
