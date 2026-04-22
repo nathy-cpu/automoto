@@ -1,6 +1,6 @@
+import hashlib
 import logging
 import os
-import hashlib
 
 from django.conf import settings
 from django.core.cache import cache
@@ -24,7 +24,9 @@ class ApolloClient:
         self.base_url = "https://api.apollo.io"
         self.debug_mode = getattr(settings, "DEBUG_ENRICHMENT", True)
 
-    def _handle_http_error(self, exc: requests.HTTPError, context: str, company_name: str):
+    def _handle_http_error(
+        self, exc: requests.HTTPError, context: str, company_name: str
+    ):
         response = exc.response
         status_code = response.status_code if response is not None else None
         body = response.text[:500] if response is not None else ""
@@ -94,8 +96,13 @@ class ApolloClient:
             "name": name,
             "title": data.get("title") or data.get("job_title") or "",
             "email": data.get("email") or data.get("primary_email") or "",
-            "linkedin_url": data.get("linkedin_url") or data.get("linkedin_profile_url") or "",
-            "phone": data.get("phone_number") or data.get("phone") or data.get("direct_phone") or "",
+            "linkedin_url": data.get("linkedin_url")
+            or data.get("linkedin_profile_url")
+            or "",
+            "phone": data.get("phone_number")
+            or data.get("phone")
+            or data.get("direct_phone")
+            or "",
         }
 
     def _people_api_search(self, company_name, location=None, titles=None):
@@ -182,10 +189,14 @@ class ApolloClient:
             return []
 
         try:
-            people = self._people_api_search(company_name, location=location, titles=titles)
+            people = self._people_api_search(
+                company_name, location=location, titles=titles
+            )
             person_ids = []
             for person in people:
-                person_data = person.get("person", person) if isinstance(person, dict) else {}
+                person_data = (
+                    person.get("person", person) if isinstance(person, dict) else {}
+                )
                 person_id = person_data.get("id") or person_data.get("person_id")
                 if person_id:
                     person_ids.append({"id": person_id})

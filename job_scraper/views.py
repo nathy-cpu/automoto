@@ -3,8 +3,8 @@ import threading
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.core.cache import cache
 from django.contrib import messages
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import connection
 from django.db.models import Q

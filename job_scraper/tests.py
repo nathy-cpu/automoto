@@ -6,8 +6,8 @@ from django.urls import reverse
 
 import requests
 
-from job_scraper.apollo_client import ApolloClient
 from job_scraper.api_scraper import ApiScraper
+from job_scraper.apollo_client import ApolloClient
 from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
 from job_scraper.request_scraper import JobScraper
 
