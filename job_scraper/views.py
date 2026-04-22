@@ -1,22 +1,19 @@
 import logging
 import threading
 
+from django.conf import settings
 from django.contrib import messages
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.conf import settings
-from django.db.models import Q
 
-from .models import Contact, CustomWebsite, Job
+from .models import CustomWebsite, Job
 from .request_scraper import JobScraper
-from .stealth_scraper import StealthScraper
-from .utils import get_continent_from_country
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_WEBSITES = ["indeed", "linkedin"]
 RESULTS_PER_PAGE = 10
 
 
@@ -56,7 +53,11 @@ def dashboard(request: HttpRequest):
     if q:
         query = Q()
         for word in q.split():
-            query &= (Q(title__icontains=word) | Q(company__icontains=word) | Q(description__icontains=word))
+            query &= (
+                Q(title__icontains=word)
+                | Q(company__icontains=word)
+                | Q(description__icontains=word)
+            )
         queryset = queryset.filter(query)
 
     # Sort
@@ -105,7 +106,7 @@ def trigger_scrape(request: HttpRequest):
     keywords = request.GET.get("q", "software contract")
     location = request.GET.get("countries") or request.GET.get("continents") or "us"
     source_id = request.GET.get("source_id")
-    
+
     website_id = None
     if source_id and source_id != "all":
         try:
@@ -114,7 +115,9 @@ def trigger_scrape(request: HttpRequest):
             pass
 
     scraper = JobScraper()
-    new_jobs = scraper.get_recent_jobs(location, keywords, max_pages=1, website_id=website_id)
+    new_jobs = scraper.get_recent_jobs(
+        location, keywords, max_pages=1, website_id=website_id
+    )
 
     # Lead enrichment for new jobs
 
@@ -123,7 +126,7 @@ def trigger_scrape(request: HttpRequest):
 
         def run_enrichment(jobs_list):
             apollo = ApolloClient()
-            for job in jobs_list[:10]: # Enrich up to 10 jobs
+            for job in jobs_list[:10]:  # Enrich up to 10 jobs
                 try:
                     apollo.enrich_job_contacts(job)
                 except Exception as e:
@@ -138,64 +141,6 @@ def trigger_scrape(request: HttpRequest):
     if query_string:
         redirect_url = f"{redirect_url}?{query_string}"
     return redirect(redirect_url)
-
-
-def job_search(request: HttpRequest):
-    """
-    Unified job search that uses all active custom sources.
-    """
-    if request.method == "POST":
-        keywords = request.POST.get("keywords", "")
-        location = request.POST.get("location", "")
-
-        params = {
-            "keywords": keywords,
-            "location": location,
-        }
-
-        try:
-            country = str(location).strip() or "us"
-            search_keywords = str(keywords).strip() or None
-
-            scraper = JobScraper()
-            scraped_jobs = scraper.get_recent_jobs(
-                country, search_keywords, max_pages=2
-            )
-
-            # Since get_recent_jobs now returns Job objects, we just need to provide them to context
-            paginator = Paginator(scraped_jobs, RESULTS_PER_PAGE)
-            page_number = request.GET.get("page", 1)
-            page_obj = paginator.get_page(page_number)
-
-            context = _job_search_context(
-                results=page_obj, pagination=page_obj, params=params
-            )
-        except Exception as e:
-            logger.error(f"Error during unified job search: {e}")
-            context = _job_search_context(
-                results=[],
-                params=params,
-                error="An error occurred while scraping. Please try again.",
-            )
-
-        return render(request, "job_scraper/job_search.html", context)
-
-    if request.method == "GET" and request.GET.get("page"):
-        search_params = request.session.get("search_params", {})
-        scraped_jobs = request.session.get("scraped_jobs", [])
-
-        if scraped_jobs:
-            paginator = Paginator(scraped_jobs, RESULTS_PER_PAGE)
-            page_number = request.GET.get("page", 1)
-            page_obj = paginator.get_page(page_number)
-            context = _job_search_context(
-                results=page_obj,
-                pagination=page_obj,
-                params=search_params,
-            )
-            return render(request, "job_scraper/job_search.html", context)
-
-    return render(request, "job_scraper/job_search.html", _job_search_context())
 
 
 def job_detail(request: HttpRequest, job_id: int):
@@ -224,7 +169,7 @@ def manage_websites(request: HttpRequest):
         location_selector = request.POST.get("location_selector")
         job_link_selector = request.POST.get("job_link_selector")
         is_api = request.POST.get("is_api") == "on"
-        
+
         if name and base_url and search_url:
             CustomWebsite.objects.create(
                 name=name,
