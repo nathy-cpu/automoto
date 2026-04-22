@@ -4,14 +4,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ job.title }} | AutoMoto</title>
+    <title>{{ job.title }} | AutoMoto Sales Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     {% load static %}
-    <link rel="stylesheet" href="{% static 'job_scraper/css/dashboard.css' %}">
-    <link rel="stylesheet" href="{% static 'job_scraper/css/detail.css' %}">
+    <!-- Ensure CSS paths are absolute to avoid loading issues in nested URLs -->
+    <link rel="stylesheet" href="/static/job_scraper/css/dashboard.css">
+    <link rel="stylesheet" href="/static/job_scraper/css/detail.css">
 </head>
 
-<body>
+<body class="detail-page">
 
     <header>
         <div class="logo">AutoMoto Sales Pro</div>
@@ -19,133 +20,165 @@
             <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
             <a href="{% url 'manage_websites' %}" class="nav-link">Manage Sources</a>
         </nav>
-        <div class="actions">
-        </div>
     </header>
 
     <main class="detail-main">
         <div class="detail-container">
-            <a href="{% url 'dashboard' %}" class="back-link">&larr; Back to Dashboard</a>
+            <div class="top-nav">
+                <a href="{% url 'dashboard' %}" class="back-link">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+                    Back to Dashboard
+                </a>
+            </div>
 
             {% if error %}
-            <div class="detail-error">
+            <div class="detail-error glass-panel">
+                <div class="error-icon">!</div>
                 <p>{{ error }}</p>
             </div>
             {% elif job %}
-            <div class="detail-header">
-                <h1 class="detail-title">{{ job.title }}</h1>
-                <div class="detail-company-loc">
-                    {{ job.company }} &bull; {{ job.location }}
+            <div class="detail-header-section">
+                <div class="header-content">
+                    <h1 class="detail-title">{{ job.title }}</h1>
+                    <div class="detail-company-loc">
+                        <span class="company">{{ job.company }}</span>
+                        <span class="separator">&bull;</span>
+                        <span class="location">{{ job.location }}</span>
+                    </div>
+                    <div class="detail-badges">
+                        {% if job.is_rfp %}
+                        <span class="badge badge-rfp">RFP / Contract</span>
+                        {% endif %}
+                        <span class="badge badge-loc">{{ job.continent|default:"Global" }}</span>
+                        {% if job.job_type %}
+                        <span class="badge badge-type">{{ job.job_type }}</span>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="detail-badges">
-                    {% if job.is_rfp %}
-                    <span class="badge badge-rfp">RFP</span>
+                <div class="header-actions">
+                    {% if job.application_link %}
+                    <a href="{{ job.application_link }}" target="_blank" class="btn-apply btn-glow">Apply Now</a>
                     {% endif %}
-                    <span class="badge badge-loc">{{ job.continent }}</span>
                 </div>
             </div>
 
-            <div class="grid-layout">
-                <!-- Left Column: Details -->
-                <div>
-                    <div class="section-title">WHAT THEY WANT</div>
-                    <div class="info-card info-card-text">
-                        {% if job.needs_summary %}
-                        <div class="detail-summary">
-                            <strong class="summary-label">AI Summary:</strong><br>
-                            {{ job.needs_summary }}
+            <div class="detail-grid">
+                <!-- Left Column: Content -->
+                <div class="content-column">
+                    <section class="glass-section">
+                        <div class="section-header">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            <h3>What They Want</h3>
                         </div>
-                        {% endif %}
-                        <div class="pre-wrap-text">{{ job.description }}</div>
-                    </div>
+                        <div class="section-body">
+                            {% if job.needs_summary %}
+                            <div class="ai-summary-box">
+                                <div class="ai-label">
+                                    <span class="ai-icon">✨</span> AI Insights
+                                </div>
+                                <p>{{ job.needs_summary }}</p>
+                            </div>
+                            {% endif %}
+                            
+                            <div class="description-text pre-wrap-text">
+                                {{ job.description|default:"No detailed description available yet. Our system is still scanning this lead." }}
+                            </div>
+                        </div>
+                    </section>
 
                     {% if job.requirements %}
-                    <div class="section-title">Requirements</div>
-                    <div class="info-card info-card-text pre-wrap-text">
-                        {{ job.requirements }}
-                    </div>
-                    {% endif %}
-
-                    {% if job.application_instructions or job.application_link %}
-                    <div class="section-title">How to Apply</div>
-                    <div class="info-card">
-                        {% if job.application_instructions %}
-                        <div class="mb-1 pre-wrap-text">{{ job.application_instructions }}</div>
-                        {% endif %}
-                        {% if job.application_link %}
-                        <a href="{{ job.application_link }}" target="_blank" class="btn-apply btn-apply-detail">Apply Now</a>
-                        {% endif %}
-                    </div>
+                    <section class="glass-section mt-2">
+                        <div class="section-header">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                            <h3>Technical Requirements</h3>
+                        </div>
+                        <div class="section-body pre-wrap-text">
+                            {{ job.requirements }}
+                        </div>
+                    </section>
                     {% endif %}
                 </div>
 
-                <!-- Right Column: Meta & Contacts -->
-                <div>
-                    <div class="section-title">Job Meta</div>
-                    <div class="info-card">
-                        <div class="mb-1">
-                            <div class="info-label">Source</div>
-                            <div class="info-value">{{ job.source_website }}</div>
-                            {% if job.source_url %}
-                            <a href="{{ job.source_url }}" target="_blank" class="source-link">View Original Posting &rarr;</a>
-                            {% endif %}
+                <!-- Right Column: Sidebar -->
+                <div class="sidebar-column">
+                    <section class="glass-section">
+                        <div class="section-header">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                            <h3>Job Meta</h3>
                         </div>
-                        <div class="mb-1">
-                            <div class="info-label">Industry</div>
-                            <div class="info-value">{{ job.industry|default:"Not specified" }}</div>
+                        <div class="meta-list">
+                            <div class="meta-item">
+                                <label>Salary</label>
+                                <span>{{ job.salary|default:"Scanning..." }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <label>Industry</label>
+                                <span>{{ job.industry|default:"Technology" }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <label>Experience</label>
+                                <span>{{ job.experience_level|default:"Not specified" }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <label>Posted</label>
+                                <span>{{ job.posted_date|default:job.created_at|date:"M d, Y" }}</span>
+                            </div>
+                            <div class="meta-item">
+                                <label>Source</label>
+                                <a href="{{ job.source_url }}" target="_blank" class="source-link">{{ job.source_website }} &nearrow;</a>
+                            </div>
                         </div>
-                        <div class="mb-1">
-                            <div class="info-label">Job Type</div>
-                            <div class="info-value">{{ job.job_type|default:"Not specified" }}</div>
-                        </div>
-                        <div class="mb-1">
-                            <div class="info-label">Experience</div>
-                            <div class="info-value">{{ job.experience_level|default:"Not specified" }}</div>
-                        </div>
-                        <div class="mb-1">
-                            <div class="info-label">Salary</div>
-                            <div class="info-value">{{ job.salary|default:"Not specified" }}</div>
-                        </div>
-                        <div>
-                            <div class="info-label">Posted / Scraped</div>
-                            <div class="info-value">{{ job.posted_date|default:job.created_at|date:"M d, Y" }}</div>
-                        </div>
-                    </div>
+                    </section>
 
-                    <div class="section-title">POTENTIAL CONTACTS</div>
-                    <div class="info-card">
+                    <section class="glass-section mt-2">
+                        <div class="section-header">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                            <h3>Potential Contacts</h3>
+                        </div>
                         <div class="contacts-list">
                             {% for contact in job.contacts.all %}
-                            <div class="detail-contact-item">
-                                <div class="detail-contact-avatar">
-                                    {{ contact.name|slice:":1" }}
-                                </div>
-                                <div class="contact-info">
-                                    <h4 class="detail-contact-name">{{ contact.name }}</h4>
-                                    <p class="detail-contact-title">{{ contact.title }}</p>
-                                    <div class="detail-contact-links">
+                            <div class="contact-card">
+                                <div class="avatar">{{ contact.name|slice:":1" }}</div>
+                                <div class="info">
+                                    <h4>{{ contact.name }}</h4>
+                                    <p>{{ contact.title }}</p>
+                                    <div class="links">
                                         {% if contact.email %}
-                                        <a href="mailto:{{ contact.email }}" title="Email" class="contact-link contact-link-email">&#9993; Email</a>
+                                        <a href="mailto:{{ contact.email }}" class="icon-link" title="Email">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                                        </a>
                                         {% endif %}
                                         {% if contact.linkedin_url %}
-                                        <a href="{{ contact.linkedin_url }}" target="_blank" title="LinkedIn" class="contact-link contact-link-linkedin">&#128101; LinkedIn</a>
+                                        <a href="{{ contact.linkedin_url }}" target="_blank" class="icon-link" title="LinkedIn">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path><rect x="2" y="9" width="4" height="12"></rect><circle cx="4" cy="4" r="2"></circle></svg>
+                                        </a>
                                         {% endif %}
                                     </div>
                                 </div>
                             </div>
                             {% empty %}
-                            <p style="font-size: 0.85rem; color: var(--text-dim); font-style: italic;">Enrichment pending or no contacts found.</p>
+                            <div class="empty-contacts">
+                                <div class="scanning-loader"></div>
+                                <p>Enrichment in progress...</p>
+                            </div>
                             {% endfor %}
                         </div>
-                    </div>
+                    </section>
                 </div>
             </div>
             {% else %}
-            <div class="not-found-msg">
+            <div class="not-found glass-panel">
                 <h3>Job details not found.</h3>
+                <p>The link might be broken or the lead has been removed.</p>
+                <a href="{% url 'dashboard' %}" class="btn-apply mt-1">Return to Dashboard</a>
             </div>
             {% endif %}
         </div>
     </main>
+
+    <footer class="detail-footer">
+        &copy; 2026 AutoMoto Sales Professional Tool
+    </footer>
 </body>
+
 </html> 

@@ -112,29 +112,51 @@ class StealthScraper:
                             if not job_url or not title:
                                 continue
 
-                            city = ""
-                            country = ""
-                            if "," in loc_text:
-                                parts = loc_text.split(",")
-                                city = parts[0].strip()
-                                country = parts[1].strip()
-                            else:
-                                country = loc_text.strip()
+                            salary = ""
+                            if website.salary_selector:
+                                salary_elem = element.select_one(website.salary_selector)
+                                salary = salary_elem.get_text(strip=True) if salary_elem else ""
 
-                            continent = get_continent_from_country(country)
+                            description = ""
+                            requirements = ""
+                            
+                            # If we have a detail link and description selector, fetch details
+                            # We only do this for new jobs to save time, or if requested
+                            if job_url and website.description_selector:
+                                # Check if job already exists with description
+                                if not Job.objects.filter(source_url=job_url).exclude(description="").exists():
+                                    logger.info(f"Fetching description for {job_url}")
+                                    description = self._get_description_selenium(driver, job_url, website.description_selector)
+                            
+                            job_data = {
+                                "title": title.strip(),
+                                "company": company.strip(),
+                                "location": loc_text.strip(),
+                                "job_url": job_url,
+                                "salary": salary,
+                                "description": description,
+                            }
+                            
+                            # Apply the same heuristic enrichment logic
+                            job_data = self._enrich_job_data(job_data, description, keywords)
 
                             all_new_jobs.append({
                                 "source_url": job_url,
                                 "defaults": {
-                                    "title": title.strip(),
-                                    "company": company.strip(),
-                                    "location": loc_text.strip(),
-                                    "city": city,
-                                    "country": country,
-                                    "continent": continent,
+                                    "title": job_data.get("title", ""),
+                                    "company": job_data.get("company", ""),
+                                    "location": job_data.get("location", ""),
+                                    "city": job_data.get("city", ""),
+                                    "country": job_data.get("country", ""),
+                                    "continent": job_data.get("continent", ""),
+                                    "salary": job_data.get("salary", ""),
+                                    "job_type": job_data.get("job_type", ""),
+                                    "experience_level": job_data.get("experience_level", ""),
+                                    "industry": job_data.get("industry", ""),
+                                    "description": job_data.get("description", ""),
+                                    "requirements": job_data.get("requirements", ""),
                                     "source_website": website.name,
-                                    "is_rfp": "contract" in keywords.lower()
-                                    or "rfp" in keywords.lower(),
+                                    "is_rfp": "contract" in keywords.lower() or "rfp" in keywords.lower(),
                                 }
                             })
 
@@ -189,13 +211,145 @@ class StealthScraper:
         website = CustomWebsite.objects.get(name="Indeed")
         return self.scrape(website, keywords, location, max_pages)
 
-    def _get_description(self, page, job_url):
-        """Fetch job description from a specific job URL."""
+    def _get_description_selenium(self, driver, job_url, selector):
+        """Fetch job description from a specific job URL using Selenium."""
         try:
-            page.goto(job_url, wait_until="domcontentloaded", timeout=30000)
-            time.sleep(random.uniform(1, 3))
-            desc_elem = page.query_selector("#jobDescriptionText")
-            return desc_elem.inner_text() if desc_elem else ""
+            # We open in a new tab to avoid losing search state
+            driver.execute_script("window.open('');")
+            driver.switch_to.window(driver.window_handles[-1])
+            driver.get(job_url)
+            
+            time.sleep(random.uniform(2, 4))
+            
+            # Wait for selector
+            try:
+                WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                )
+            except:
+                pass
+
+            soup = BeautifulSoup(driver.page_source, 'html.parser')
+            desc_elem = soup.select_one(selector)
+            
+            text = ""
+            if desc_elem:
+                # Try to keep some formatting
+                for br in desc_elem.find_all("br"):
+                    br.replace_with("\n")
+                for p in desc_elem.find_all("p"):
+                    p.append("\n")
+                text = desc_elem.get_text()
+                
+            driver.close()
+            driver.switch_to.window(driver.window_handles[0])
+            return text.strip()
         except Exception as e:
             logger.error(f"Failed to get description for {job_url}: {e}")
+            try:
+                if len(driver.window_handles) > 1:
+                    driver.close()
+                    driver.switch_to.window(driver.window_handles[0])
+            except:
+                pass
             return ""
+
+    def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
+        """Apply heuristic parsing to fill in missing fields."""
+        loc_text = job_data.get("location", "")
+        city = ""
+        country = ""
+        if loc_text:
+            if "," in loc_text:
+                parts = loc_text.split(",")
+                city = parts[0].strip()
+                country = parts[-1].strip()
+            else:
+                country = loc_text.strip()
+        
+        from .utils import get_continent_from_country
+        continent = get_continent_from_country(country) if country else ""
+        
+        job_data["city"] = city
+        job_data["country"] = country
+        job_data["continent"] = continent
+
+        if not job_data.get("requirements") and description:
+            job_data["requirements"] = self._extract_requirements(description)
+        if not job_data.get("salary") and description:
+            job_data["salary"] = self._extract_salary_fallback(description)
+            
+        job_data["job_type"] = self._extract_job_type(description)
+        job_data["experience_level"] = self._extract_experience_level(description)
+        job_data["industry"] = self._extract_industry(description)
+        
+        return job_data
+
+    def _extract_salary_fallback(self, description: str) -> str:
+        import re
+        salary_pattern = re.compile(
+            r"(\$[\d,]+(?:\.\d{2})?(?:\s*(?:-|to)\s*\$[\d,]+(?:\.\d{2})?)?(?:\s*(?:a|per|/)\s*(?:year|yr|month|mo|hour|hr|week|wk|annually|k))?)",
+            re.IGNORECASE
+        )
+        match = salary_pattern.search(description)
+        if match: return match.group(1)
+        alt_pattern = re.compile(
+            r"((?:€|£)[\d,]+(?:\.\d{2})?(?:\s*(?:-|to)\s*(?:€|£)[\d,]+(?:\.\d{2})?)?(?:\s*(?:a|per|/)\s*(?:year|yr|month|mo|hour|hr|week|wk|annually|k))?)",
+            re.IGNORECASE
+        )
+        alt_match = alt_pattern.search(description)
+        if alt_match: return alt_match.group(1)
+        return ""
+
+    def _extract_requirements(self, description: str) -> str:
+        import re
+        requirements_keywords = [
+            "requirements", "qualifications", "skills", "experience",
+            "must have", "should have", "preferred", "minimum",
+        ]
+        lines = description.split("\n")
+        requirements_lines = []
+        in_requirements = False
+        for line in lines:
+            line_lower = line.lower()
+            if any(k in line_lower for k in ["benefits", "what we offer", "perks", "equal opportunity"]):
+                in_requirements = False
+            if any(keyword in line_lower for keyword in requirements_keywords):
+                in_requirements = True
+                continue
+            if in_requirements and line.strip():
+                if line.strip().startswith(("•", "-", "*", "·", "✓", "o ")):
+                    requirements_lines.append(line.strip())
+                elif re.match(r"^\d+\.", line.strip()):
+                    requirements_lines.append(line.strip())
+        return "\n".join(requirements_lines) if requirements_lines else ""
+
+    def _extract_job_type(self, description: str) -> str:
+        job_types = ["full-time", "part-time", "contract", "temporary", "internship", "freelance"]
+        description_lower = description.lower()
+        for job_type in job_types:
+            if job_type in description_lower: return job_type.title()
+        return "Full-time"
+
+    def _extract_experience_level(self, description: str) -> str:
+        levels = {
+            "entry-level": ["entry level", "junior", "0-2 years", "1-2 years"],
+            "mid-level": ["mid level", "intermediate", "3-5 years", "2-5 years"],
+            "senior": ["senior", "lead", "5+ years", "7+ years", "experienced"],
+            "executive": ["executive", "director", "manager", "head of", "chief"],
+        }
+        description_lower = description.lower()
+        for level, keywords in levels.items():
+            if any(keyword in description_lower for keyword in keywords): return level.title()
+        return "Mid-level"
+
+    def _extract_industry(self, description: str) -> str:
+        industries = [
+            "technology", "healthcare", "finance", "education", "retail",
+            "manufacturing", "consulting", "marketing", "sales", "engineering",
+            "software", "logistics"
+        ]
+        description_lower = description.lower()
+        for industry in industries:
+            if industry in description_lower: return industry.title()
+        return "Technology"

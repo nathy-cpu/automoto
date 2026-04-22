@@ -1,4 +1,5 @@
 import logging
+import threading
 
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -102,7 +103,7 @@ def trigger_scrape(request: HttpRequest):
     Manually triggers the consolidated scraper.
     """
     keywords = request.GET.get("q", "software contract")
-    location = request.GET.get("countries", "us")
+    location = request.GET.get("countries") or request.GET.get("continents") or "us"
     source_id = request.GET.get("source_id")
     
     website_id = None
@@ -120,12 +121,17 @@ def trigger_scrape(request: HttpRequest):
     if settings.DEBUG_ENRICHMENT and new_jobs:
         from .apollo_client import ApolloClient
 
-        apollo = ApolloClient()
-        for job in new_jobs[:5]:
-            try:
-                apollo.enrich_job_contacts(job)
-            except:
-                pass
+        def run_enrichment(jobs_list):
+            apollo = ApolloClient()
+            for job in jobs_list[:10]: # Enrich up to 10 jobs
+                try:
+                    apollo.enrich_job_contacts(job)
+                except Exception as e:
+                    logger.error(f"Background enrichment failed for job {job.id}: {e}")
+
+        # Run in background to avoid hanging the UI
+        thread = threading.Thread(target=run_enrichment, args=(new_jobs,))
+        thread.start()
 
     query_string = request.GET.urlencode()
     redirect_url = reverse("dashboard")

@@ -304,16 +304,38 @@ class JobScraper:
         loc_text = job_data.get("location", "")
         city = ""
         country = ""
+        
+        US_STATES = [
+            "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"
+        ]
+
         if loc_text:
-            if "," in loc_text:
-                parts = loc_text.split(",")
-                city = parts[0].strip()
-                country = parts[-1].strip()
+            loc_upper = loc_text.upper()
+            # Direct matches for broad regions
+            if "EUROPE" in loc_upper:
+                country = "United Kingdom" # Fallback country to help continent mapping
+                continent = "Europe"
+            elif "EMEA" in loc_upper:
+                continent = "Europe"
+            elif "USA" in loc_upper or "UNITED STATES" in loc_upper:
+                country = "United States"
+                continent = "North America"
+            elif "," in loc_text:
+                parts = [p.strip() for p in loc_text.split(",")]
+                city = parts[0]
+                # Check if last part is a US state or "USA"
+                last_part = parts[-1].upper()
+                if last_part in US_STATES or last_part == "USA" or last_part == "UNITED STATES":
+                    country = "United States"
+                    continent = "North America"
+                else:
+                    country = parts[-1]
             else:
                 country = loc_text.strip()
         
-        from .utils import get_continent_from_country
-        continent = get_continent_from_country(country) if country else ""
+        if not continent:
+            from .utils import get_continent_from_country
+            continent = get_continent_from_country(country) if country else "Unknown"
         
         job_data["city"] = city
         job_data["country"] = country

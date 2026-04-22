@@ -177,23 +177,22 @@
             {% if jobs.has_other_pages %}
             <div class="pagination">
                 {% if jobs.has_previous %}
-                <a href="?page={{ jobs.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}"
-                    class="page-link">&laquo;</a>
+                <a href="?page=1{% if query_string %}&{{ query_string }}{% endif %}" class="page-link">&laquo;&laquo; First</a>
+                <a href="?page={{ jobs.previous_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" class="page-link">&laquo; Prev</a>
                 {% endif %}
 
                 {% for num in jobs.paginator.page_range %}
-                {% if jobs.number == num %}
-                <a href="#" class="page-link active">{{ num }}</a>
-                {% elif num > jobs.number|add:"-3" and num < jobs.number|add:"3" %} <a
-                    href="?page={{ num }}{% if query_string %}&{{ query_string }}{% endif %}" class="page-link">{{ num
-                    }}</a>
+                    {% if jobs.number == num %}
+                        <span class="page-link active">{{ num }}</span>
+                    {% elif num > jobs.number|add:"-3" and num < jobs.number|add:"3" %}
+                        <a href="?page={{ num }}{% if query_string %}&{{ query_string }}{% endif %}" class="page-link">{{ num }}</a>
                     {% endif %}
-                    {% endfor %}
+                {% endfor %}
 
-                    {% if jobs.has_next %}
-                    <a href="?page={{ jobs.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}"
-                        class="page-link">&raquo;</a>
-                    {% endif %}
+                {% if jobs.has_next %}
+                <a href="?page={{ jobs.next_page_number }}{% if query_string %}&{{ query_string }}{% endif %}" class="page-link">Next &raquo;</a>
+                <a href="?page={{ jobs.paginator.num_pages }}{% if query_string %}&{{ query_string }}{% endif %}" class="page-link">Last &raquo;&raquo;</a>
+                {% endif %}
             </div>
             {% endif %}
         </main>

@@ -52,7 +52,7 @@ class ApolloClient:
         headers = {"Content-Type": "application/json", "Cache-Control": "no-cache"}
 
         try:
-            response = requests.post(endpoint, json=payload, headers=headers)
+            response = requests.post(endpoint, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
             data = response.json()
 
@@ -77,6 +77,9 @@ class ApolloClient:
         """
         Find and save contacts for a given job.
         """
+        if not job.company or job.company.strip().lower() in ["not available", "unknown", ""]:
+            logger.warning(f"Skipping Apollo enrichment for job {job.id}: No valid company name.")
+            return 0
 
         contacts_data = self.search_contacts(job.company, job.location)
 
