@@ -194,51 +194,15 @@ def job_search(request: HttpRequest):
 
 def job_detail(request: HttpRequest, job_id: int):
     try:
-        scraped_jobs = request.session.get("scraped_jobs", [])
-        job_data = next(
-            (job for job in scraped_jobs if str(job.get("id")) == str(job_id)),
-            None,
-        )
-
-        if job_data is None:
-            return render(
-                request,
-                "job_scraper/job_detail.html",
-                {
-                    "job": None,
-                    "error": "Job details are unavailable. Please run a new search.",
-                },
-            )
-
-        job_detail = {
-            "id": job_data.get("id"),
-            "title": job_data.get("title", "") or "Not available",
-            "company": job_data.get("company", "") or "Not available",
-            "industry": job_data.get("industry", "") or "Not available",
-            "location": job_data.get("location", "") or "Not available",
-            "description": job_data.get("description", "")
-            or "Description unavailable.",
-            "requirements": job_data.get("requirements", ""),
-            "salary": job_data.get("salary", "") or "Not available",
-            "job_type": job_data.get("job_type", "") or "Not available",
-            "experience_level": job_data.get("experience_level", "") or "Not available",
-            "posted_date": job_data.get("posted_date", "") or "Not available",
-            "application_instructions": "Apply through the original job posting link.",
-            "application_link": job_data.get(
-                "application_link", job_data.get("job_url", "")
-            ),
-            "source_website": job_data.get("source_website", "") or "Unknown",
-            "source_url": job_data.get("source_url", "") or "",
-        }
-
-        return render(request, "job_scraper/job_detail.html", {"job": job_detail})
+        job = get_object_or_404(Job, pk=job_id)
+        return render(request, "job_scraper/job_detail.html", {"job": job})
 
     except Exception as e:
         logger.error(f"Error fetching job details: {e}")
         return render(
             request,
             "job_scraper/job_detail.html",
-            {"job": None, "error": "Unable to load job details."},
+            {"job": None, "error": "An error occurred while fetching job details."},
         )
 
 

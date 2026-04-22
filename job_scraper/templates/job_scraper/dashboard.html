@@ -141,7 +141,7 @@
                         </h3>
                         <div class="company-name">{{ job.company }} &bull; {{ job.location }}</div>
                     </div>
-                    <div style="display: flex; gap: 0.5rem; align-items: flex-start;">
+                    <div class="job-badges">
                         {% if job.is_rfp %}
                         <span class="badge badge-rfp">RFP</span>
                         {% endif %}
@@ -149,49 +149,19 @@
                     </div>
                 </div>
 
-                <div class="job-details">
-                    <div class="needs-section">
-                        <div class="section-title">WHAT THEY WANT</div>
-                        <div class="needs-summary">
-                            {% if job.needs_summary %}
-                            {{ job.needs_summary }}
-                            {% else %}
-                            {{ job.description|truncatewords:40 }}
-                            {% endif %}
-                        </div>
-                        <a href="{{ job.source_url }}" target="_blank"
-                            style="display: inline-block; margin-top: 1rem; color: var(--primary); font-size: 0.85rem; text-decoration: none;">View
-                            Original Posting &rarr;</a>
+                <div class="job-preview">
+                    {{ job.description|truncatewords:25 }}
+                </div>
+                
+                <div class="job-card-footer">
+                    <div class="job-card-meta">
+                        {% if job.contacts.count > 0 %}
+                        <span class="contact-count-highlight">{{ job.contacts.count }} contact{{ job.contacts.count|pluralize }} found</span>
+                        {% else %}
+                        No contacts found yet
+                        {% endif %}
                     </div>
-
-                    <div class="contacts-section">
-                        <div class="section-title">POTENTIAL CONTACTS</div>
-                        <div class="contacts-list">
-                            {% for contact in job.contacts.all %}
-                            <div class="contact-item">
-                                <div class="contact-avatar">{{ contact.name|slice:":1" }}</div>
-                                <div class="contact-info">
-                                    <h4>{{ contact.name }}</h4>
-                                    <p>{{ contact.title }}</p>
-                                    <div style="margin-top: 0.25rem;">
-                                        {% if contact.email %}
-                                        <a href="mailto:{{ contact.email }}" title="Email"
-                                            style="color: var(--primary); text-decoration: none; margin-right: 0.5rem;">&#9993;</a>
-                                        {% endif %}
-                                        {% if contact.linkedin_url %}
-                                        <a href="{{ contact.linkedin_url }}" target="_blank" title="LinkedIn"
-                                            style="color: var(--secondary); text-decoration: none;">&#128101;</a>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            {% empty %}
-                            <p style="font-size: 0.85rem; color: var(--text-dim); font-style: italic;">Enrichment
-                                pending or no
-                                contacts found.</p>
-                            {% endfor %}
-                        </div>
-                    </div>
+                    <a href="{% url 'job_detail' job.id %}" class="btn-view-details">View Details &rarr;</a>
                 </div>
             </div>
             {% endfor %}

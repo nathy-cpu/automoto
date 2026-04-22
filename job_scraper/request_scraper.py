@@ -137,6 +137,10 @@ class JobScraper:
                                 )
                                 job_data.update(detail_data)
 
+                            # Apply heuristic parsing
+                            description = job_data.get("description", "")
+                            job_data = self._enrich_job_data(job_data, description, keywords)
+
                             # Create/Update the Job model instance
                             job, created = Job.objects.update_or_create(
                                 source_url=job_data["job_url"],
@@ -144,18 +148,23 @@ class JobScraper:
                                     "title": job_data["title"],
                                     "company": job_data["company"],
                                     "location": job_data["location"],
+                                    "city": job_data.get("city", ""),
+                                    "country": job_data.get("country", ""),
+                                    "continent": job_data.get("continent", ""),
                                     "salary": job_data.get("salary", ""),
+                                    "job_type": job_data.get("job_type", ""),
+                                    "experience_level": job_data.get("experience_level", ""),
+                                    "industry": job_data.get("industry", ""),
                                     "posted_date": None,  # Parsing dates generically is hard, we'll use created_at
                                     "source_website": website.name,
-                                    "description": job_data.get("description", ""),
+                                    "description": description,
                                     "requirements": job_data.get("requirements", ""),
                                     "application_link": job_data.get(
                                         "application_link", ""
                                     ),
                                     "is_rfp": (
-                                        "contract" in keywords.lower()
-                                        if keywords
-                                        else False
+                                        "contract" in (keywords or "").lower()
+                                        or "rfp" in (keywords or "").lower()
                                     ),
                                 },
                             )
@@ -288,31 +297,90 @@ class JobScraper:
             logger.error(f"Error parsing custom card: {e}")
             return None
 
+    def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
+        """Apply heuristic parsing to fill in missing fields."""
+        
+        # 1. Location parsing (City, Country, Continent)
+        loc_text = job_data.get("location", "")
+        city = ""
+        country = ""
+        if loc_text:
+            if "," in loc_text:
+                parts = loc_text.split(",")
+                city = parts[0].strip()
+                country = parts[-1].strip()
+            else:
+                country = loc_text.strip()
+        
+        from .utils import get_continent_from_country
+        continent = get_continent_from_country(country) if country else ""
+        
+        job_data["city"] = city
+        job_data["country"] = country
+        job_data["continent"] = continent
+
+        # 2. Requirements fallback
+        if not job_data.get("requirements") and description:
+            job_data["requirements"] = self._extract_requirements(description)
+            
+        # 3. Salary fallback
+        if not job_data.get("salary") and description:
+            job_data["salary"] = self._extract_salary_fallback(description)
+            
+        # 4. Job type & experience
+        job_data["job_type"] = self._extract_job_type(description)
+        job_data["experience_level"] = self._extract_experience_level(description)
+        job_data["industry"] = self._extract_industry(description)
+        
+        return job_data
+
+    def _extract_salary_fallback(self, description: str) -> str:
+        """Find salary patterns in text like $100,000 - $120,000"""
+        salary_pattern = re.compile(
+            r"(\$[\d,]+(?:\.\d{2})?(?:\s*(?:-|to)\s*\$[\d,]+(?:\.\d{2})?)?(?:\s*(?:a|per|/)\s*(?:year|yr|month|mo|hour|hr|week|wk|annually|k))?)",
+            re.IGNORECASE
+        )
+        match = salary_pattern.search(description)
+        if match:
+            return match.group(1)
+        
+        # Look for EUR/GBP as well
+        alt_pattern = re.compile(
+            r"((?:€|£)[\d,]+(?:\.\d{2})?(?:\s*(?:-|to)\s*(?:€|£)[\d,]+(?:\.\d{2})?)?(?:\s*(?:a|per|/)\s*(?:year|yr|month|mo|hour|hr|week|wk|annually|k))?)",
+            re.IGNORECASE
+        )
+        alt_match = alt_pattern.search(description)
+        if alt_match:
+            return alt_match.group(1)
+            
+        return ""
+
     def _extract_requirements(self, description: str) -> str:
         """Extract requirements from job description"""
         requirements_keywords = [
-            "requirements",
-            "qualifications",
-            "skills",
-            "experience",
-            "must have",
-            "should have",
-            "preferred",
-            "minimum",
+            "requirements", "qualifications", "skills", "experience",
+            "must have", "should have", "preferred", "minimum",
+            "what you need", "what you'll bring", "what we are looking for",
+            "what we're looking for", "your profile", "who you are"
         ]
 
         lines = description.split("\n")
         requirements_lines = []
         in_requirements = False
-
+        
         for line in lines:
             line_lower = line.lower()
+            
+            # Stop if we hit benefits or other sections
+            if any(k in line_lower for k in ["benefits", "what we offer", "perks", "equal opportunity"]):
+                in_requirements = False
 
             if any(keyword in line_lower for keyword in requirements_keywords):
                 in_requirements = True
+                continue # Skip the header line itself
 
             if in_requirements and line.strip():
-                if line.strip().startswith(("•", "-", "*", "·")):
+                if line.strip().startswith(("•", "-", "*", "·", "✓", "o ")):
                     requirements_lines.append(line.strip())
                 elif re.match(r"^\d+\.", line.strip()):
                     requirements_lines.append(line.strip())
@@ -322,20 +390,13 @@ class JobScraper:
     def _extract_job_type(self, description: str) -> str:
         """Extract job type from description"""
         job_types = [
-            "full-time",
-            "part-time",
-            "contract",
-            "temporary",
-            "internship",
-            "freelance",
+            "full-time", "part-time", "contract", "temporary", "internship", "freelance"
         ]
         description_lower = description.lower()
-
         for job_type in job_types:
             if job_type in description_lower:
                 return job_type.title()
-
-        return "Full-time"  # Default
+        return "Full-time"
 
     def _extract_experience_level(self, description: str) -> str:
         """Extract experience level from description"""
@@ -343,39 +404,26 @@ class JobScraper:
             "entry-level": ["entry level", "junior", "0-2 years", "1-2 years"],
             "mid-level": ["mid level", "intermediate", "3-5 years", "2-5 years"],
             "senior": ["senior", "lead", "5+ years", "7+ years", "experienced"],
-            "executive": ["executive", "director", "manager", "head of"],
+            "executive": ["executive", "director", "manager", "head of", "chief"],
         }
-
         description_lower = description.lower()
-
         for level, keywords in levels.items():
             if any(keyword in description_lower for keyword in keywords):
                 return level.title()
-
-        return "Mid-level"  # Default
+        return "Mid-level"
 
     def _extract_industry(self, description: str) -> str:
         """Extract industry from description"""
         industries = [
-            "technology",
-            "healthcare",
-            "finance",
-            "education",
-            "retail",
-            "manufacturing",
-            "consulting",
-            "marketing",
-            "sales",
-            "engineering",
+            "technology", "healthcare", "finance", "education", "retail",
+            "manufacturing", "consulting", "marketing", "sales", "engineering",
+            "software", "logistics"
         ]
-
         description_lower = description.lower()
-
         for industry in industries:
             if industry in description_lower:
                 return industry.title()
-
-        return "Technology"  # Default
+        return "Technology"
 
     def _clean_text(self, text: str) -> str:
         """Clean and normalize text"""
