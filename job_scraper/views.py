@@ -6,6 +6,7 @@ from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.conf import settings
+from django.db.models import Q
 
 from .models import Contact, CustomWebsite, Job
 from .request_scraper import JobScraper
@@ -52,16 +53,23 @@ def dashboard(request: HttpRequest):
     # Search
     q = request.GET.get("q")
     if q:
-        queryset = queryset.filter(title__icontains=q) | queryset.filter(
-            company__icontains=q
-        )
+        query = Q()
+        for word in q.split():
+            query &= (Q(title__icontains=word) | Q(company__icontains=word) | Q(description__icontains=word))
+        queryset = queryset.filter(query)
 
     # Sort
-    queryset = queryset.order_by("-created_at")
+    queryset = queryset.order_by("-updated_at")
 
     paginator = Paginator(queryset, RESULTS_PER_PAGE)
     page_number = request.GET.get("page", 1)
     page_obj = paginator.get_page(page_number)
+
+    # Clean query string for pagination
+    query_dict = request.GET.copy()
+    if "page" in query_dict:
+        del query_dict["page"]
+    query_string = query_dict.urlencode()
 
     # Meta data for filters
     all_continents = Job.objects.values_list("continent", flat=True).distinct()
@@ -83,6 +91,7 @@ def dashboard(request: HttpRequest):
             "q": q,
             "source_id": request.GET.get("source_id", ""),
         },
+        "query_string": query_string,
     }
 
     return render(request, "job_scraper/dashboard.html", context)

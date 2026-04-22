@@ -109,6 +109,9 @@ class Contact(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=['job', 'name'], name='unique_job_contact_name')
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.title}) at {self.job.company}"

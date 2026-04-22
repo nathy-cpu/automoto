@@ -96,11 +96,15 @@ class ApiScraper:
             if created:
                 saved_jobs.append(job)
 
+        # Check for silent failures
+        if len(all_new_jobs) == 0 and not error_msg:
+            error_msg = "No jobs found. JSON paths may be broken or the API returned empty results."
+
         # Log execution
         log = ScraperExecutionLog.objects.create(
             website=website,
             scraper_type='requests' if not website.is_api else 'api', # We'll add 'api' choice to ScraperExecutionLog later if needed
-            jobs_found=len(saved_jobs),
+            jobs_found=len(all_new_jobs),
             error_message=error_msg,
         )
         

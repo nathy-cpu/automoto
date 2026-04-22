@@ -2,6 +2,7 @@ import logging
 import os
 
 from django.conf import settings
+from .models import Contact
 
 import requests
 
@@ -76,16 +77,15 @@ class ApolloClient:
         """
         Find and save contacts for a given job.
         """
-        from .models import Contact
 
         contacts_data = self.search_contacts(job.company, job.location)
 
         for data in contacts_data:
-            Contact.objects.get_or_create(
+            Contact.objects.update_or_create(
                 job=job,
-                email=data["email"],
+                name=data["name"],
                 defaults={
-                    "name": data["name"],
+                    "email": data["email"],
                     "title": data["title"],
                     "phone": data["phone"] or "",
                     "linkedin_url": data["linkedin_url"] or "",

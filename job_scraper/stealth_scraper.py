@@ -165,10 +165,14 @@ class StealthScraper:
             if created:
                 saved_jobs.append(job)
 
+        # Check for silent failures
+        if len(all_new_jobs) == 0 and not error_msg:
+            error_msg = "No jobs found. CSS selectors may be outdated or the site is blocking silently."
+
         log = ScraperExecutionLog.objects.create(
             website=website,
             scraper_type='playwright',
-            jobs_found=len(saved_jobs),
+            jobs_found=len(all_new_jobs),
             error_message=error_msg,
         )
         

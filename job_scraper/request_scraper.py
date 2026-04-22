@@ -92,6 +92,7 @@ class JobScraper:
         jobs = []
         error_msg = ""
         html_content = ""
+        parsed_jobs_count = 0
 
         for page in range(max_pages):
             try:
@@ -158,6 +159,7 @@ class JobScraper:
                                     ),
                                 },
                             )
+                            parsed_jobs_count += 1
                             if created:
                                 jobs.append(job)
                     except Exception as e:
@@ -177,10 +179,14 @@ class JobScraper:
         from django.core.files.base import ContentFile
         from datetime import datetime
 
+        # Check for silent failures
+        if parsed_jobs_count == 0 and not error_msg:
+            error_msg = "No jobs found. CSS selectors may be outdated or the site is blocking silently."
+
         log = ScraperExecutionLog.objects.create(
             website=website,
             scraper_type='requests',
-            jobs_found=len(jobs),
+            jobs_found=parsed_jobs_count,
             error_message=error_msg,
         )
         if html_content:
