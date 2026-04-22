@@ -12,22 +12,6 @@ from .models import CustomWebsite, Job
 
 logger = logging.getLogger(__name__)
 
-EASY_APPLY_INDICATORS = [
-    "easy apply",
-    "easyapply",
-    "quick apply",
-    "apply with linkedin",
-    "apply with profile",
-    "apply with your linkedin profile",
-    "one-click apply",
-    "apply with one click",
-    "apply with your profile",
-    "apply with your resume",
-    "apply with your linkedin",
-    "apply with linkedin profile",
-    "apply with linkedin resume",
-]
-
 
 class JobScraper:
     """Enhanced scraper that can handle multiple websites and extract detailed job information"""
@@ -304,6 +288,7 @@ class JobScraper:
         loc_text = job_data.get("location", "")
         city = ""
         country = ""
+        continent = ""
         
         US_STATES = [
             "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"

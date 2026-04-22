@@ -26,11 +26,9 @@ __pycache__/
 *.sqlite3
 *.db
 media/
-static/
 staticfiles/
 static_root/
-migrations/
-!migrations/__init__.py
+**/migrations/__pycache__/
 local_settings.py
 settings_local.py
 
@@ -105,3 +103,9 @@ docs/_build/
 *.crt
 *.p12
 *.pfx
+
+# Legacy scrape dumps
+indeed_search.html
+linkedin_search.html
+indeed_seaarch_files/
+linkedin_search_files/

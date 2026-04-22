@@ -6,7 +6,7 @@ Django app for searching jobs across supported job sites and user-defined custom
 
 - Built-in sources: `Indeed`, `LinkedIn`
 - Custom sources: user-managed websites using CSS selectors
-- Server-rendered UI with session-backed results and pagination
+- Server-rendered dashboard with database-backed results and pagination
 
 ## Quick Start
 

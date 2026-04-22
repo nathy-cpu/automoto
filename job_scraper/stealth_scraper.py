@@ -27,6 +27,9 @@ class StealthScraper:
         """
         Generic scrape method that uses a CustomWebsite object's selectors.
         """
+        keywords = (keywords or "").strip()
+        location = (location or "").strip()
+
         options = uc.ChromeOptions()
         if self.headless:
             options.add_argument('--headless')
@@ -205,11 +208,6 @@ class StealthScraper:
             log.html_dump.save(f"{website.name}_error_{timestamp_str}.html", ContentFile(html_content.encode('utf-8')), save=True)
 
         return saved_jobs
-
-    def scrape_indeed(self, keywords, location, max_pages=1):
-        """Deprecated: Use generic scrape() instead"""
-        website = CustomWebsite.objects.get(name="Indeed")
-        return self.scrape(website, keywords, location, max_pages)
 
     def _get_description_selenium(self, driver, job_url, selector):
         """Fetch job description from a specific job URL using Selenium."""

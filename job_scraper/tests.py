@@ -1,196 +1,178 @@
 from unittest.mock import Mock, patch
 
+import requests
 from django.test import TestCase
+from django.urls import reverse
 
-from bs4 import BeautifulSoup
-
-from job_scraper.models import CustomWebsite, Job
+from job_scraper.api_scraper import ApiScraper
+from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
 from job_scraper.request_scraper import JobScraper
 
 
-class ModelTestCase(TestCase):
+def create_custom_website(**overrides):
+    data = {
+        "name": "Custom Job Board",
+        "base_url": "https://example.com",
+        "search_url": "https://example.com/search?q={keywords}&l={location}&page={page}",
+        "job_list_selector": ".job",
+        "title_selector": ".title",
+        "company_selector": ".company",
+        "location_selector": ".location",
+        "job_link_selector": ".link",
+    }
+    data.update(overrides)
+    return CustomWebsite.objects.create(**data)
+
+
+class ModelTests(TestCase):
     def test_job_model_sanity(self):
         job = Job.objects.create(
             title="Senior Python Developer",
             company="Tech Company",
             location="Remote",
             description="Role description",
-            source_website="linkedin",
+            source_website="LinkedIn",
         )
 
         self.assertEqual(job.title, "Senior Python Developer")
         self.assertIn("Tech Company", str(job))
 
     def test_custom_website_model_sanity(self):
-        website = CustomWebsite.objects.create(
-            name="Custom Job Board",
-            base_url="https://customjobs.com",
-            search_url="https://customjobs.com/search?q={keywords}&l={location}&page={page}",
-            job_list_selector=".job",
-            title_selector=".title",
-            company_selector=".company",
-            location_selector=".location",
-            job_link_selector=".link",
-        )
+        website = create_custom_website(name="RemoteBoard")
 
-        self.assertEqual(website.name, "Custom Job Board")
+        self.assertEqual(website.name, "RemoteBoard")
         self.assertTrue(website.is_active)
 
 
-class JobSearchViewTests(TestCase):
+class DashboardViewTests(TestCase):
     def setUp(self):
-        CustomWebsite.objects.create(
-            name="RemoteBoard",
-            base_url="https://remoteboard.example",
-            search_url="https://remoteboard.example/jobs?q={keywords}&l={location}&page={page}",
-            job_list_selector=".job",
-            title_selector=".title",
-            company_selector=".company",
-            location_selector=".location",
-            job_link_selector=".link",
+        self.indeed = create_custom_website(name="Indeed")
+        self.linkedin = create_custom_website(name="LinkedIn")
+
+        Job.objects.create(
+            title="Backend Engineer",
+            company="Acme",
+            location="Remote",
+            description="Python and Django",
+            source_website="Indeed",
+        )
+        Job.objects.create(
+            title="Data Engineer",
+            company="Beta",
+            location="Berlin",
+            description="Spark and SQL",
+            source_website="LinkedIn",
         )
 
-    @patch("job_scraper.views.EnhancedJobScraper")
-    def test_job_search_uses_default_websites_when_none_selected(self, scraper_cls):
-        scraper_cls.return_value.get_recent_jobs.return_value = []
-
-        response = self.client.post("/", {"keywords": "python", "location": "us"})
+    def test_dashboard_filters_by_selected_source(self):
+        response = self.client.get(reverse("dashboard"), {"source_id": self.indeed.id})
 
         self.assertEqual(response.status_code, 200)
-        scraper_cls.return_value.get_recent_jobs.assert_called_once_with(
-            ["indeed", "linkedin"],
-            "us",
-            "python",
-            max_pages=15,
-        )
+        self.assertEqual(response.context["jobs"].paginator.count, 1)
+        self.assertEqual(response.context["jobs"].object_list[0].source_website, "Indeed")
 
-    @patch("job_scraper.views.EnhancedJobScraper")
-    def test_job_search_post_and_pagination_are_session_backed(self, scraper_cls):
-        scraped_jobs = [
+
+class TriggerScrapeViewTests(TestCase):
+    def setUp(self):
+        self.website = create_custom_website(name="RemoteBoard")
+
+    def test_trigger_scrape_requires_post(self):
+        response = self.client.get(reverse("trigger_scrape"))
+
+        self.assertEqual(response.status_code, 405)
+
+    @patch("job_scraper.views.JobScraper")
+    def test_trigger_scrape_post_uses_selected_source(self, scraper_cls):
+        scraper_cls.return_value.get_recent_jobs.return_value = []
+
+        response = self.client.post(
+            reverse("trigger_scrape"),
             {
-                "id": f"src-{i}",
-                "title": f"Job {i}",
-                "company": "Company",
-                "location": "Remote",
-                "source_website": "Indeed",
-            }
-            for i in range(1, 13)
-        ]
-        scraper_cls.return_value.get_recent_jobs.return_value = scraped_jobs
-
-        first_page = self.client.post("/", {"keywords": "python", "location": "us"})
-        self.assertEqual(first_page.status_code, 200)
-        self.assertEqual(len(first_page.context["results"].object_list), 10)
-        self.assertEqual(first_page.context["results"].paginator.count, 12)
-
-        second_page = self.client.get("/?page=2")
-        self.assertEqual(second_page.status_code, 200)
-        self.assertEqual(second_page.context["results"].number, 2)
-        self.assertEqual(len(second_page.context["results"].object_list), 2)
-        self.assertEqual(
-            second_page.context["results"].object_list[0]["title"], "Job 11"
+                "q": "python",
+                "countries": "us",
+                "source_id": str(self.website.id),
+            },
         )
+
+        self.assertEqual(response.status_code, 302)
+        scraper_cls.return_value.get_recent_jobs.assert_called_once_with(
+            "us", "python", max_pages=1, website_id=self.website.id
+        )
+
+
+class WebsiteDeleteViewTests(TestCase):
+    def setUp(self):
+        self.website = create_custom_website(name="DeleteMe")
+
+    def test_delete_website_requires_post(self):
+        response = self.client.get(reverse("delete_website", args=[self.website.id]))
+
+        self.assertEqual(response.status_code, 405)
+        self.website.refresh_from_db()
+        self.assertTrue(self.website.is_active)
+
+    def test_delete_website_post_soft_deletes_website(self):
+        response = self.client.post(reverse("delete_website", args=[self.website.id]))
+
+        self.assertEqual(response.status_code, 302)
+        self.website.refresh_from_db()
+        self.assertFalse(self.website.is_active)
 
 
 class JobDetailViewTests(TestCase):
-    def test_job_detail_returns_job_from_session(self):
-        session = self.client.session
-        session["scraped_jobs"] = [
-            {
-                "id": 1,
-                "title": "Backend Engineer",
-                "company": "Acme",
-                "location": "Remote",
-                "source_website": "LinkedIn",
-            }
-        ]
-        session.save()
+    def test_job_detail_returns_saved_job(self):
+        job = Job.objects.create(
+            title="Backend Engineer",
+            company="Acme",
+            location="Remote",
+            description="Build APIs",
+            source_website="LinkedIn",
+        )
 
-        response = self.client.get("/job/1/")
+        response = self.client.get(reverse("job_detail", args=[job.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.context["job"]["title"], "Backend Engineer")
-        self.assertIsNone(response.context.get("error"))
-
-    def test_job_detail_missing_session_job_returns_explicit_error(self):
-        session = self.client.session
-        session["scraped_jobs"] = [{"id": 1, "title": "Backend Engineer"}]
-        session.save()
-
-        response = self.client.get("/job/99/")
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.context["job"])
-        self.assertIn("unavailable", response.context["error"].lower())
+        self.assertEqual(response.context["job"].id, job.id)
 
 
-class EnhancedScraperCustomWebsiteTests(TestCase):
+class RequestScraperEnrichmentTests(TestCase):
+    def test_enrich_job_data_handles_country_without_unboundlocalerror(self):
+        scraper = JobScraper()
+
+        enriched = scraper._enrich_job_data(
+            {"location": "Germany", "title": "Engineer", "company": "Acme"},
+            "",
+            "python",
+        )
+
+        self.assertEqual(enriched["country"], "Germany")
+        self.assertTrue(enriched["continent"])
+
+
+class ApiScraperLoggingTests(TestCase):
     def setUp(self):
-        self.website = CustomWebsite.objects.create(
-            name="MyBoard",
-            base_url="https://example.com",
-            search_url="https://example.com/search?q={keywords}&l={location}&page={page}",
-            job_list_selector=".job",
-            title_selector=".title",
-            company_selector=".company",
-            location_selector=".location",
-            job_link_selector=".link",
-            salary_selector=".salary",
-            date_selector=".date",
-        )
-        self.scraper = EnhancedJobScraper()
-
-    def test_parse_custom_card_uses_deterministic_id(self):
-        html = """
-        <div class="job">
-          <span class="title">Python Engineer</span>
-          <span class="company">Acme</span>
-          <span class="location">Remote</span>
-          <span class="salary">$100k</span>
-          <span class="date">1 day ago</span>
-          <a class="link" href="/jobs/123">Apply</a>
-        </div>
-        """
-        card = BeautifulSoup(html, "html.parser").select_one(".job")
-
-        job_data = self.scraper._parse_custom_card(
-            card,
-            self.website,
-            page_number=2,
-            card_number=3,
+        self.website = create_custom_website(
+            name="API Source",
+            is_api=True,
+            api_jobs_path="data",
+            api_title_key="title",
+            api_company_key="company",
+            api_location_key="location",
+            api_description_key="description",
+            api_url_key="url",
         )
 
-        self.assertEqual(job_data["id"], f"custom-{self.website.pk}-2-3")
-        self.assertEqual(job_data["job_url"], "https://example.com/jobs/123")
-
-    @patch("job_scraper.enhanced_scrapers.time.sleep", return_value=None)
-    def test_scrape_custom_website_is_case_insensitive(self, _sleep_mock):
-        html = """
-        <div class="job">
-          <span class="title">Python Engineer</span>
-          <span class="company">Acme</span>
-          <span class="location">Remote</span>
-          <a class="link" href="/jobs/123">Apply</a>
-        </div>
-        """
-
+    @patch("job_scraper.api_scraper.requests.get")
+    def test_api_failure_still_creates_execution_log(self, get_mock):
         response = Mock()
-        response.content = html.encode("utf-8")
-        response.raise_for_status = Mock()
+        response.raise_for_status.side_effect = requests.HTTPError("boom")
+        response.text = '{"error": "boom"}'
+        get_mock.return_value = response
 
-        with patch.object(
-            self.scraper.session, "get", return_value=response
-        ) as get_mock:
-            jobs = self.scraper._scrape_custom_website(
-                website_name="myboard",
-                country="us",
-                keywords="python",
-                max_pages=1,
-            )
+        jobs = ApiScraper().scrape(self.website, "python", "us")
 
-        self.assertEqual(len(jobs), 1)
-        self.assertEqual(jobs[0]["id"], f"custom-{self.website.pk}-1-1")
-        get_mock.assert_called_once_with(
-            "https://example.com/search?q=python&l=us&page=1",
-            timeout=30,
-        )
+        self.assertEqual(jobs, [])
+        self.assertEqual(ScraperExecutionLog.objects.count(), 1)
+        log = ScraperExecutionLog.objects.first()
+        self.assertIn("API Request Failed", log.error_message)
+        self.assertEqual(log.scraper_type, "api")

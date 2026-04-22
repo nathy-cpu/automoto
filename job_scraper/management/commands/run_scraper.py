@@ -3,8 +3,6 @@ import logging
 from django.core.management.base import BaseCommand
 
 from job_scraper.apollo_client import ApolloClient
-from job_scraper.models import Job
-from job_scraper.stealth_scraper import StealthScraper
 
 logger = logging.getLogger(__name__)
 

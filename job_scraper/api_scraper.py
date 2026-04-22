@@ -1,8 +1,11 @@
-import requests
 import logging
-from typing import List, Dict, Any
 from datetime import datetime
+from typing import List
+
+import requests
+
 from django.core.files.base import ContentFile
+
 from .models import Job, CustomWebsite, ScraperExecutionLog
 
 logger = logging.getLogger(__name__)
@@ -18,80 +21,88 @@ class ApiScraper:
         Fetch jobs from a JSON API endpoint and map keys to Job model.
         """
         all_new_jobs = []
+        saved_jobs = []
         error_msg = ""
         json_dump = ""
+        keywords = (keywords or "").strip()
+        location = (location or "").strip()
 
         try:
             # Build URL - APIs often use simple query params
-            url = website.search_url.format(
-                keywords=keywords, location=location, page=1
-            )
-            
+            url = website.search_url.format(keywords=keywords, location=location, page=1)
+
             logger.info(f"Fetching API data from {url}")
             response = requests.get(url, timeout=30)
-            
+
             try:
                 response.raise_for_status()
                 data = response.json()
-                json_dump = response.text
+                if hasattr(response, "text"):
+                    json_dump = response.text
             except Exception as e:
                 error_msg = f"API Request Failed: {e}"
-                if hasattr(response, 'text'):
+                if hasattr(response, "text"):
                     json_dump = response.text
-                return []
+                data = None
 
-            # Extract list of jobs using path
-            job_list = self._get_nested_data(data, website.api_jobs_path)
-            
-            if not job_list or not isinstance(job_list, list):
-                error_msg = f"No job list found at path '{website.api_jobs_path}'"
-                return []
+            if not error_msg:
+                # Extract list of jobs using path
+                job_list = self._get_nested_data(data, website.api_jobs_path)
 
-            for item in job_list:
-                try:
-                    # Generic mapping from JSON to Job fields
-                    job_data = {
-                        "title": self._get_val(item, website.api_title_key),
-                        "company": self._get_val(item, website.api_company_key),
-                        "location": self._get_val(item, website.api_location_key),
-                        "description": self._get_val(item, website.api_description_key),
-                        "source_url": self._get_val(item, website.api_url_key),
-                    }
+                if not job_list or not isinstance(job_list, list):
+                    error_msg = f"No job list found at path '{website.api_jobs_path}'"
+                else:
+                    keywords_lower = keywords.lower()
+                    for item in job_list:
+                        try:
+                            # Generic mapping from JSON to Job fields
+                            job_data = {
+                                "title": self._get_val(item, website.api_title_key),
+                                "company": self._get_val(item, website.api_company_key),
+                                "location": self._get_val(item, website.api_location_key),
+                                "description": self._get_val(item, website.api_description_key),
+                                "source_url": self._get_val(item, website.api_url_key),
+                            }
 
-                    # Basic validation
-                    if not job_data["title"] or not job_data["source_url"]:
-                        continue
+                            # Basic validation
+                            if not job_data["title"] or not job_data["source_url"]:
+                                continue
 
-                    # Filter by keywords in memory if necessary 
-                    # (Arbeitnow has search in API but some others might not)
-                    if keywords and keywords.lower() not in (job_data["title"] + job_data["description"]).lower():
-                        continue
+                            # Filter by keywords in memory if necessary
+                            if keywords_lower and keywords_lower not in (
+                                job_data["title"] + job_data["description"]
+                            ).lower():
+                                continue
 
-                    all_new_jobs.append({
-                        "source_url": job_data["source_url"],
-                        "defaults": {
-                            "title": job_data["title"].strip(),
-                            "company": job_data["company"].strip(),
-                            "location": job_data["location"].strip(),
-                            "source_website": website.name,
-                            "description": job_data["description"],
-                            "is_rfp": "contract" in keywords.lower() or "rfp" in keywords.lower() if keywords else False,
-                        }
-                    })
+                            all_new_jobs.append(
+                                {
+                                    "source_url": job_data["source_url"],
+                                    "defaults": {
+                                        "title": job_data["title"].strip(),
+                                        "company": job_data["company"].strip(),
+                                        "location": job_data["location"].strip(),
+                                        "source_website": website.name,
+                                        "description": job_data["description"],
+                                        "is_rfp": (
+                                            "contract" in keywords_lower
+                                            or "rfp" in keywords_lower
+                                        ),
+                                    },
+                                }
+                            )
 
-                except Exception as e:
-                    logger.error(f"Error parsing API item: {e}")
+                        except Exception as e:
+                            logger.error(f"Error parsing API item: {e}")
 
         except Exception as e:
             error_msg = f"Unexpected API error: {e}"
             logger.error(error_msg)
 
         # Save results and log
-        saved_jobs = []
         for j_data in all_new_jobs:
             job, created = Job.objects.update_or_create(
                 source_url=j_data["source_url"],
-                defaults=j_data["defaults"]
+                defaults=j_data["defaults"],
             )
             if created:
                 saved_jobs.append(job)
@@ -103,21 +114,25 @@ class ApiScraper:
         # Log execution
         log = ScraperExecutionLog.objects.create(
             website=website,
-            scraper_type='requests' if not website.is_api else 'api', # We'll add 'api' choice to ScraperExecutionLog later if needed
+            scraper_type="api",
             jobs_found=len(all_new_jobs),
             error_message=error_msg,
         )
-        
+
         if json_dump:
             timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            log.html_dump.save(f"{website.name}_api_{timestamp_str}.json", ContentFile(json_dump.encode('utf-8')), save=True)
+            log.html_dump.save(
+                f"{website.name}_api_{timestamp_str}.json",
+                ContentFile(json_dump.encode("utf-8")),
+                save=True,
+            )
 
         return saved_jobs
 
     def _get_nested_data(self, data, path):
         if not path:
             return data
-        keys = path.split('.')
+        keys = path.split(".")
         for key in keys:
             if isinstance(data, dict):
                 data = data.get(key)

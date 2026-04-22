@@ -1,5 +1,6 @@
 import logging
 import threading
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -8,6 +9,7 @@ from django.db.models import Q
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from .models import CustomWebsite, Job
 from .request_scraper import JobScraper
@@ -36,6 +38,16 @@ def dashboard(request: HttpRequest):
     industries = parse_filter(request.GET.get("industries"))
     expertise = request.GET.get("expertise")
     is_rfp = request.GET.get("is_rfp")
+    source_id = request.GET.get("source_id", "")
+
+    if source_id and source_id != "all":
+        try:
+            source_website = CustomWebsite.objects.only("name").get(
+                id=int(source_id), is_active=True
+            )
+            queryset = queryset.filter(source_website=source_website.name)
+        except (ValueError, CustomWebsite.DoesNotExist):
+            source_id = ""
 
     if continents:
         queryset = queryset.filter(continent__in=continents)
@@ -91,7 +103,7 @@ def dashboard(request: HttpRequest):
             "expertise": expertise,
             "is_rfp": is_rfp,
             "q": q,
-            "source_id": request.GET.get("source_id", ""),
+            "source_id": source_id,
         },
         "query_string": query_string,
     }
@@ -99,13 +111,14 @@ def dashboard(request: HttpRequest):
     return render(request, "job_scraper/dashboard.html", context)
 
 
+@require_POST
 def trigger_scrape(request: HttpRequest):
     """
     Manually triggers the consolidated scraper.
     """
-    keywords = request.GET.get("q", "software contract")
-    location = request.GET.get("countries") or request.GET.get("continents") or "us"
-    source_id = request.GET.get("source_id")
+    keywords = request.POST.get("q", "software contract")
+    location = request.POST.get("countries") or request.POST.get("continents") or "us"
+    source_id = request.POST.get("source_id")
 
     website_id = None
     if source_id and source_id != "all":
@@ -136,7 +149,21 @@ def trigger_scrape(request: HttpRequest):
         thread = threading.Thread(target=run_enrichment, args=(new_jobs,))
         thread.start()
 
-    query_string = request.GET.urlencode()
+    query_params = {}
+    for key in (
+        "q",
+        "continents",
+        "countries",
+        "industries",
+        "expertise",
+        "is_rfp",
+        "source_id",
+    ):
+        value = request.POST.get(key)
+        if value:
+            query_params[key] = value
+
+    query_string = urlencode(query_params)
     redirect_url = reverse("dashboard")
     if query_string:
         redirect_url = f"{redirect_url}?{query_string}"
@@ -207,6 +234,7 @@ def manage_websites(request: HttpRequest):
     )
 
 
+@require_POST
 def delete_website(request: HttpRequest, website_id: int):
     """Delete a custom website"""
     website = get_object_or_404(CustomWebsite, id=website_id)
