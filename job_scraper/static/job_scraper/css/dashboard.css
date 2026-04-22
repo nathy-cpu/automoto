@@ -1,65 +1,4 @@
-:root {
-    --bg-dark: #0f172a;
-    --bg-card: rgba(30, 41, 59, 0.7);
-    --primary: #38bdf8;
-    --primary-glow: rgba(56, 189, 248, 0.3);
-    --secondary: #818cf8;
-    --accent: #f472b6;
-    --text-main: #f8fafc;
-    --text-dim: #94a3b8;
-    --glass-border: rgba(255, 255, 255, 0.1);
-}
-
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: 'Outfit', sans-serif;
-}
-
-body {
-    background-color: var(--bg-dark);
-    color: var(--text-main);
-    min-height: 100vh;
-    overflow-x: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-/* Animated Background */
-body::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle at 50% 50%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
-        radial-gradient(circle at 10% 10%, rgba(129, 140, 248, 0.05) 0%, transparent 50%);
-    z-index: -1;
-}
-
-header {
-    padding: 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid var(--glass-border);
-    backdrop-filter: blur(10px);
-    position: sticky;
-    top: 0;
-    z-index: 100;
-}
-
-.logo {
-    font-size: 1.5rem;
-    font-weight: 700;
-    background: linear-gradient(45deg, var(--primary), var(--secondary));
-    background-clip: text;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    letter-spacing: -0.5px;
-}
+@import url("base.css");
 
 .container {
     display: grid;
@@ -119,23 +58,6 @@ input {
 select:focus,
 input:focus {
     border-color: var(--primary);
-}
-
-.btn-apply {
-    width: 100%;
-    background: linear-gradient(45deg, var(--primary), var(--secondary));
-    color: white;
-    border: none;
-    padding: 0.75rem;
-    border-radius: 0.75rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.btn-apply:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.4);
 }
 
 /* Main Content */

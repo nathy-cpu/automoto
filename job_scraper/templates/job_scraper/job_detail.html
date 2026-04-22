@@ -7,9 +7,7 @@
     <title>{{ job.title }} | AutoMoto Sales Pro</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     {% load static %}
-    <!-- Ensure CSS paths are absolute to avoid loading issues in nested URLs -->
-    <link rel="stylesheet" href="/static/job_scraper/css/dashboard.css">
-    <link rel="stylesheet" href="/static/job_scraper/css/detail.css">
+    <link rel="stylesheet" href="{% static 'job_scraper/css/detail.css' %}">
 </head>
 
 <body class="detail-page">

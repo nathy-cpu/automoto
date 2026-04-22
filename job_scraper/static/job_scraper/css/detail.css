@@ -1,9 +1,6 @@
+@import url("base.css");
+
 /* Premium Detail View Styles */
-.detail-page {
-    background: #0f172a;
-    color: #f8fafc;
-    overflow-x: hidden;
-}
 
 .detail-container {
     max-width: 1200px;
