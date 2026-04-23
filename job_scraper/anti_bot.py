@@ -5,7 +5,6 @@ from datetime import timedelta
 from django.core.cache import cache
 from django.utils import timezone
 
-
 CHALLENGE_MARKERS = (
     "cf-challenge",
     "__cf_chl_",
@@ -74,7 +73,9 @@ def summarize_selector_coverage(coverage):
     return " ".join(parts)
 
 
-def record_block_event(website_id, threshold=FAILURE_THRESHOLD, cooldown_seconds=COOLDOWN_SECONDS):
+def record_block_event(
+    website_id, threshold=FAILURE_THRESHOLD, cooldown_seconds=COOLDOWN_SECONDS
+):
     failure_key = _failure_key(website_id)
     cooldown_key = _cooldown_key(website_id)
     failures = int(cache.get(failure_key, 0)) + 1

@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("job_scraper", "0005_scraperexecutionlog"),
     ]
@@ -16,7 +15,7 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 choices=[
                     ("requests", "Standard (Requests)"),
-                    ("playwright", "Stealth (Playwright)"),
+                    ("seleniumbase", "Stealth (seleniumbase)"),
                 ],
                 default="requests",
                 max_length=20,

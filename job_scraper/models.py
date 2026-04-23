@@ -75,7 +75,7 @@ class CustomWebsite(models.Model):
     )  # CSS selector for requirements
     use_stealth = models.BooleanField(
         default=False,
-        help_text="Use high-protection stealth browser (Playwright) for this site",
+        help_text="Use high-protection stealth browser (SeleniumBase UC mode) for this site",
     )
     # API Support
     is_api = models.BooleanField(
@@ -140,7 +140,7 @@ class ScraperExecutionLog(models.Model):
 
     SCRAPER_CHOICES = [
         ("requests", "Standard (Requests)"),
-        ("playwright", "Stealth (Selenium)"),
+        ("seleniumbase", "Stealth (SeleniumBase)"),
         ("api", "JSON API"),
     ]
 

@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("job_scraper", "0003_job_continent_job_expertise_tags_job_is_rfp_and_more"),
     ]
@@ -15,7 +14,7 @@ class Migration(migrations.Migration):
             name="use_stealth",
             field=models.BooleanField(
                 default=False,
-                help_text="Use high-protection stealth browser (Playwright) for this site",
+                help_text="Use high-protection stealth browser (seleniumbase) for this site",
             ),
         ),
     ]

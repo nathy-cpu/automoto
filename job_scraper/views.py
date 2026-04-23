@@ -1,6 +1,6 @@
 import logging
-import threading
 import re
+import threading
 from urllib.parse import urlencode
 
 from django.conf import settings

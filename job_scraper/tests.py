@@ -5,7 +5,6 @@ from django.test.utils import override_settings
 from django.urls import reverse
 
 import requests
-from selenium.common.exceptions import InvalidSessionIdException
 
 from job_scraper.anti_bot import (
     classify_anti_bot_response,
@@ -20,6 +19,10 @@ from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
 from job_scraper.request_scraper import JobScraper
 from job_scraper.stealth_scraper import StealthScraper
 from job_scraper.utils import parse_location_components
+
+
+class InvalidSessionIdException(Exception):
+    pass
 
 
 def create_custom_website(**overrides):
@@ -443,9 +446,9 @@ class StealthScraperRegressionTests(TestCase):
         )
 
     @patch("job_scraper.stealth_scraper.jitter_sleep")
-    @patch("job_scraper.stealth_scraper.uc.Chrome")
+    @patch("job_scraper.stealth_scraper.Driver")
     def test_scrape_parses_cards_without_local_job_scope_failure(
-        self, chrome_mock, sleep_mock
+        self, driver_factory_mock, sleep_mock
     ):
         with open(
             "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
@@ -457,9 +460,10 @@ class StealthScraperRegressionTests(TestCase):
 
         driver = Mock()
         driver.page_source = html
+        driver.get_page_source.return_value = html
         driver.window_handles = ["main"]
         driver.get_screenshot_as_png.return_value = b"png"
-        chrome_mock.return_value = driver
+        driver_factory_mock.return_value = driver
 
         jobs = StealthScraper(headless=True).scrape(
             self.website, keywords="", location="us", max_pages=1
@@ -473,10 +477,10 @@ class StealthScraperRegressionTests(TestCase):
         )
 
     @patch("job_scraper.stealth_scraper.jitter_sleep")
-    @patch("job_scraper.stealth_scraper.uc.Chrome")
+    @patch("job_scraper.stealth_scraper.Driver")
     @patch.object(StealthScraper, "_get_description_selenium")
     def test_scrape_disables_detail_fetch_after_invalid_session(
-        self, get_description_mock, chrome_mock, sleep_mock
+        self, get_description_mock, driver_factory_mock, sleep_mock
     ):
         with open(
             "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
@@ -488,9 +492,10 @@ class StealthScraperRegressionTests(TestCase):
 
         driver = Mock()
         driver.page_source = html
+        driver.get_page_source.return_value = html
         driver.window_handles = ["main"]
         driver.get_screenshot_as_png.return_value = b"png"
-        chrome_mock.return_value = driver
+        driver_factory_mock.return_value = driver
         get_description_mock.side_effect = InvalidSessionIdException("dead session")
 
         jobs = StealthScraper(headless=True).scrape(

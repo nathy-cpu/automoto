@@ -6,9 +6,10 @@ import uuid
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
+from django.core.files.base import ContentFile
+
 import requests
 from bs4 import BeautifulSoup
-from django.core.files.base import ContentFile
 
 from .anti_bot import (
     classify_anti_bot_response,
@@ -83,9 +84,7 @@ class JobScraper:
                         scraper_type=(
                             "api"
                             if website.is_api
-                            else (
-                                "playwright" if website.use_stealth else "requests"
-                            )
+                            else ("seleniumbase" if website.use_stealth else "requests")
                         ),
                         jobs_found=0,
                         error_message=(
@@ -130,7 +129,11 @@ class JobScraper:
                     (
                         "api"
                         if website.is_api
-                        else ("selenium_stealth" if website.use_stealth else "requests")
+                        else (
+                            "seleniumbase_stealth"
+                            if website.use_stealth
+                            else "requests"
+                        )
                     ),
                 )
 

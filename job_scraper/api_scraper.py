@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ApiScraper:
     """
     A scraper for websites that provide a JSON API endpoint.
-    Bypasses Playwright/Stealth entirely for faster, reliable data fetching.
+    Bypasses browser stealth scraping entirely for faster, reliable data fetching.
     """
 
     def scrape(self, website: CustomWebsite, keywords: str, location: str) -> List[Job]:
@@ -149,9 +149,7 @@ class ApiScraper:
         # Check for silent failures
         if len(all_new_jobs) == 0 and not error_msg:
             if payload_jobs_count and keyword_terms:
-                error_msg = (
-                    f"API returned {payload_jobs_count} jobs but 0 matched keywords '{keywords}'."
-                )
+                error_msg = f"API returned {payload_jobs_count} jobs but 0 matched keywords '{keywords}'."
             else:
                 error_msg = "No jobs found. JSON paths may be broken or the API returned empty results."
 

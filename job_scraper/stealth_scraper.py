@@ -4,14 +4,9 @@ import time
 import uuid
 from datetime import datetime
 
-from django.core.files.base import ContentFile
-
-import undetected_chromedriver as uc
 from bs4 import BeautifulSoup
-from selenium.common.exceptions import InvalidSessionIdException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from django.core.files.base import ContentFile
+from seleniumbase import Driver
 
 from .anti_bot import (
     classify_anti_bot_response,
@@ -34,7 +29,7 @@ USER_AGENTS = [
 
 class StealthScraper:
     """
-    A generic stealth scraper using undetected_chromedriver to bypass bot protection.
+    A generic stealth scraper using SeleniumBase UC mode.
     """
 
     def __init__(self, headless=True):
@@ -59,18 +54,6 @@ class StealthScraper:
             max_pages,
         )
 
-        options = uc.ChromeOptions()
-        options.add_argument(f"--user-agent={random.choice(USER_AGENTS)}")
-        options.add_argument("--lang=en-US")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        if self.headless:
-            options.add_argument("--headless=new")
-
-        # Add random viewport to look more authentic
-        options.add_argument(
-            f"--window-size={random.randint(1200, 1920)},{random.randint(800, 1080)}"
-        )
-
         driver = None
         all_new_jobs = []
         error_msg = ""
@@ -84,7 +67,7 @@ class StealthScraper:
         card_parse_failures = 0
 
         try:
-            driver = uc.Chrome(options=options)
+            driver = self._create_driver()
 
             for page_num in range(1, max_pages + 1):
                 url = website.search_url.format(
@@ -99,17 +82,17 @@ class StealthScraper:
                         page_num,
                         url,
                     )
-                    driver.get(url)
+                    driver.open_url(url)
 
                     jitter_sleep(3.0, 5.5)
                     self._simulate_browse(driver)
 
                     try:
                         # Wait for the primary selector to ensure page loaded
-                        WebDriverWait(driver, 20).until(
-                            EC.presence_of_element_located(
-                                (By.CSS_SELECTOR, website.job_list_selector)
-                            )
+                        driver.wait_for_element_present(
+                            website.job_list_selector,
+                            by="css selector",
+                            timeout=20,
                         )
                     except Exception:
                         logger.warning(
@@ -121,7 +104,7 @@ class StealthScraper:
                         )
                         error_msg = "Timeout waiting for primary selector. Possible CAPTCHA wall."
                         try:
-                            html_content = driver.page_source
+                            html_content = driver.get_page_source()
                             screenshot_bytes = driver.get_screenshot_as_png()
                         except Exception:
                             logger.debug(
@@ -132,7 +115,7 @@ class StealthScraper:
                             )
                         break
 
-                    html_content = driver.page_source
+                    html_content = driver.get_page_source()
                     soup = BeautifulSoup(html_content, "html.parser")
                     job_elements = soup.select(website.job_list_selector)
                     coverage = compute_selector_coverage(
@@ -267,10 +250,14 @@ class StealthScraper:
                                     jitter_sleep(0.8, 1.8)
                                     try:
                                         description = self._get_description_selenium(
-                                            driver, job_url, website.description_selector
+                                            driver,
+                                            job_url,
+                                            website.description_selector,
                                         )
                                         detail_fetch_count += 1
-                                    except InvalidSessionIdException:
+                                    except Exception as exc:
+                                        if not self._is_invalid_session_error(exc):
+                                            raise
                                         detail_fetch_disabled = True
                                         detail_fetch_session_failures += 1
                                         logger.warning(
@@ -373,15 +360,13 @@ class StealthScraper:
         # Check for silent failures
         if len(all_new_jobs) == 0 and not error_msg:
             if card_parse_failures:
-                error_msg = (
-                    f"Parsed cards but failed to extract/save {card_parse_failures} cards."
-                )
+                error_msg = f"Parsed cards but failed to extract/save {card_parse_failures} cards."
             else:
                 error_msg = "No jobs found. CSS selectors may be outdated or the site is blocking silently."
 
         log = ScraperExecutionLog.objects.create(
             website=website,
-            scraper_type="playwright",
+            scraper_type="seleniumbase",
             jobs_found=len(all_new_jobs),
             error_message=error_msg,
         )
@@ -421,28 +406,48 @@ class StealthScraper:
     def _simulate_browse(self, driver):
         """Introduce small browse-like pauses and scrolling before extraction."""
         try:
-            driver.execute_script("window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.2));")
+            driver.execute_script(
+                "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.2));"
+            )
             jitter_sleep(0.4, 1.0)
-            driver.execute_script("window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.45));")
+            driver.execute_script(
+                "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.45));"
+            )
             jitter_sleep(0.5, 1.1)
             driver.execute_script("window.scrollTo(0, 0);")
         except Exception:
             logger.debug("stealth_browse_simulation_failed", exc_info=True)
 
+    def _create_driver(self):
+        width = random.randint(1200, 1920)
+        height = random.randint(800, 1080)
+        return Driver(
+            browser="chrome",
+            headless2=self.headless,
+            uc=True,
+            uc_subprocess=True,
+            agent=random.choice(USER_AGENTS),
+            locale_code="en-US",
+            window_size=f"{width},{height}",
+            chromium_arg="--disable-blink-features=AutomationControlled",
+        )
+
     def _get_description_selenium(self, driver, job_url, selector):
-        """Fetch job description from a specific job URL using Selenium."""
+        """Fetch job description from a detail URL using SeleniumBase driver."""
         try:
             # We open in a new tab to avoid losing search state
-            driver.execute_script("window.open('');")
-            driver.switch_to.window(driver.window_handles[-1])
-            driver.get(job_url)
+            driver.open_new_tab(switch_to=True)
+            driver.switch_to_newest_window()
+            driver.open_url(job_url)
 
             jitter_sleep(2.0, 4.0)
 
             # Wait for selector
             try:
-                WebDriverWait(driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, selector))
+                driver.wait_for_element_present(
+                    selector,
+                    by="css selector",
+                    timeout=10,
                 )
             except Exception:
                 logger.debug(
@@ -452,7 +457,7 @@ class StealthScraper:
                     exc_info=True,
                 )
 
-            soup = BeautifulSoup(driver.page_source, "html.parser")
+            soup = BeautifulSoup(driver.get_page_source(), "html.parser")
             desc_elem = soup.select_one(selector)
 
             text = ""
@@ -465,24 +470,28 @@ class StealthScraper:
                 text = desc_elem.get_text()
 
             driver.close()
-            driver.switch_to.window(driver.window_handles[0])
+            driver.switch_to_default_window()
             return text.strip()
-        except InvalidSessionIdException:
-            logger.exception("description_fetch_failed job_url=%s", job_url)
-            raise
-        except Exception:
+        except Exception as exc:
             logger.exception("description_fetch_failed job_url=%s", job_url)
             try:
                 if len(driver.window_handles) > 1:
                     driver.close()
-                    driver.switch_to.window(driver.window_handles[0])
+                    driver.switch_to_default_window()
             except Exception:
                 logger.debug(
                     "description_tab_cleanup_failed job_url=%s",
                     job_url,
                     exc_info=True,
                 )
+            if self._is_invalid_session_error(exc):
+                raise
             return ""
+
+    def _is_invalid_session_error(self, exc):
+        return exc.__class__.__name__ == "InvalidSessionIdException" or (
+            "invalid session id" in str(exc).lower()
+        )
 
     def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
         """Apply heuristic parsing to fill in missing fields."""

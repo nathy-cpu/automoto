@@ -34,7 +34,7 @@ class Command(BaseCommand):
                 "date_selector": ".job-search-card__listdate, .job-search-card__listdate--new",
                 "job_link_selector": ".base-card__full-link",
                 "description_selector": ".show-more-less-html__markup, .description__text",
-                "use_stealth": False,  # LinkedIn sometimes works with requests if not too frequent
+                "use_stealth": True,
             },
             {
                 "name": "Arbeitnow (API)",
