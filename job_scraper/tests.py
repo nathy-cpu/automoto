@@ -5,6 +5,7 @@ from django.test.utils import override_settings
 from django.urls import reverse
 
 import requests
+from selenium.common.exceptions import InvalidSessionIdException
 
 from job_scraper.anti_bot import (
     classify_anti_bot_response,
@@ -470,3 +471,31 @@ class StealthScraperRegressionTests(TestCase):
         self.assertNotIn(
             "Parsed cards but failed to extract/save", latest_log.error_message
         )
+
+    @patch("job_scraper.stealth_scraper.jitter_sleep")
+    @patch("job_scraper.stealth_scraper.uc.Chrome")
+    @patch.object(StealthScraper, "_get_description_selenium")
+    def test_scrape_disables_detail_fetch_after_invalid_session(
+        self, get_description_mock, chrome_mock, sleep_mock
+    ):
+        with open(
+            "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+        ) as fh:
+            html = fh.read()
+
+        driver = Mock()
+        driver.page_source = html
+        driver.window_handles = ["main"]
+        driver.get_screenshot_as_png.return_value = b"png"
+        chrome_mock.return_value = driver
+        get_description_mock.side_effect = InvalidSessionIdException("dead session")
+
+        jobs = StealthScraper(headless=True).scrape(
+            self.website, keywords="software", location="europe", max_pages=1
+        )
+
+        self.assertGreater(len(jobs), 0)
+        self.assertEqual(get_description_mock.call_count, 1)

@@ -8,6 +8,7 @@ from django.core.files.base import ContentFile
 
 import undetected_chromedriver as uc
 from bs4 import BeautifulSoup
+from selenium.common.exceptions import InvalidSessionIdException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -77,6 +78,8 @@ class StealthScraper:
         html_content = ""
         detail_fetch_count = 0
         detail_fetch_limit = 3
+        detail_fetch_disabled = False
+        detail_fetch_session_failures = 0
         selector_metrics = ""
         card_parse_failures = 0
 
@@ -252,6 +255,7 @@ class StealthScraper:
                                 job_url
                                 and website.description_selector
                                 and detail_fetch_count < detail_fetch_limit
+                                and not detail_fetch_disabled
                             ):
                                 # Check if job already exists with description
                                 if (
@@ -261,10 +265,21 @@ class StealthScraper:
                                 ):
                                     logger.info(f"Fetching description for {job_url}")
                                     jitter_sleep(0.8, 1.8)
-                                    description = self._get_description_selenium(
-                                        driver, job_url, website.description_selector
-                                    )
-                                    detail_fetch_count += 1
+                                    try:
+                                        description = self._get_description_selenium(
+                                            driver, job_url, website.description_selector
+                                        )
+                                        detail_fetch_count += 1
+                                    except InvalidSessionIdException:
+                                        detail_fetch_disabled = True
+                                        detail_fetch_session_failures += 1
+                                        logger.warning(
+                                            "description_fetch_disabled_invalid_session run_id=%s website_id=%s website=%s job_url=%s",
+                                            run_id,
+                                            website.id,
+                                            website.name,
+                                            job_url,
+                                        )
 
                             job_data = {
                                 "title": title.strip(),
@@ -335,7 +350,15 @@ class StealthScraper:
             error_msg = f"Driver Initialization/Execution Failed: {e}"
         finally:
             if driver:
-                driver.quit()
+                try:
+                    driver.quit()
+                except Exception:
+                    logger.debug(
+                        "stealth_driver_quit_failed run_id=%s website_id=%s",
+                        run_id,
+                        website.id,
+                        exc_info=True,
+                    )
 
         # Save jobs outside event loop to avoid SynchronousOnlyOperation
         saved_jobs = []
@@ -378,7 +401,7 @@ class StealthScraper:
             )
 
         logger.info(
-            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s card_parse_failures=%s",
+            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s detail_fetch_disabled=%s detail_fetch_session_failures=%s card_parse_failures=%s",
             run_id,
             website.id,
             website.name,
@@ -388,6 +411,8 @@ class StealthScraper:
             bool(error_msg),
             selector_metrics or "n/a",
             detail_fetch_count,
+            detail_fetch_disabled,
+            detail_fetch_session_failures,
             card_parse_failures,
         )
 
@@ -442,6 +467,9 @@ class StealthScraper:
             driver.close()
             driver.switch_to.window(driver.window_handles[0])
             return text.strip()
+        except InvalidSessionIdException:
+            logger.exception("description_fetch_failed job_url=%s", job_url)
+            raise
         except Exception:
             logger.exception("description_fetch_failed job_url=%s", job_url)
             try:
