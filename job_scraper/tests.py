@@ -6,6 +6,13 @@ from django.urls import reverse
 
 import requests
 
+from job_scraper.anti_bot import (
+    classify_anti_bot_response,
+    clear_block_state,
+    compute_selector_coverage,
+    record_block_event,
+    summarize_selector_coverage,
+)
 from job_scraper.api_scraper import ApiScraper
 from job_scraper.apollo_client import ApolloClient
 from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
@@ -165,6 +172,51 @@ class RequestScraperEnrichmentTests(TestCase):
         self.assertTrue(enriched["continent"])
 
 
+class AntiBotMitigationTests(TestCase):
+    def tearDown(self):
+        clear_block_state(999)
+
+    def test_classifier_ignores_marker_strings_when_cards_exist(self):
+        html = '<div class="job_seen_beacon"></div><script>var x="recaptcha cloudflare";</script>'
+
+        result = classify_anti_bot_response(200, html, card_count=1)
+
+        self.assertFalse(result["blocked"])
+
+    def test_classifier_blocks_challenge_page_without_cards(self):
+        html = '<html><div id="cf-challenge">Verify you are human</div></html>'
+
+        result = classify_anti_bot_response(403, html, card_count=0)
+
+        self.assertTrue(result["blocked"])
+        self.assertIn("status=403", result["reason"])
+
+    def test_record_block_event_enters_cooldown_after_threshold(self):
+        first = record_block_event(999, threshold=2, cooldown_seconds=60)
+        second = record_block_event(999, threshold=2, cooldown_seconds=60)
+
+        self.assertEqual(first["failures"], 1)
+        self.assertEqual(second["failures"], 2)
+        self.assertIsNotNone(second["cooldown_until"])
+
+    def test_compute_selector_coverage_summarizes_per_field_hits(self):
+        from bs4 import BeautifulSoup
+
+        doc = BeautifulSoup(
+            '<div class="job"><span class="title">A</span></div><div class="job"></div>',
+            "html.parser",
+        )
+        coverage = compute_selector_coverage(
+            doc.select(".job"), {"title": ".title", "company": ".company"}
+        )
+        summary = summarize_selector_coverage(coverage)
+
+        self.assertEqual(coverage["title"]["hits"], 1)
+        self.assertEqual(coverage["title"]["total"], 2)
+        self.assertIn("title=1/2(50%)", summary)
+        self.assertIn("company=0/2(0%)", summary)
+
+
 class ApiScraperLoggingTests(TestCase):
     def setUp(self):
         self.website = create_custom_website(
@@ -232,3 +284,23 @@ class ApolloClientTests(TestCase):
         self.assertEqual(post_mock.call_count, 2)
         self.assertIn("mixed_people/api_search", post_mock.call_args_list[0].args[0])
         self.assertIn("people/bulk_match", post_mock.call_args_list[1].args[0])
+
+
+class RequestScraperCooldownTests(TestCase):
+    def setUp(self):
+        self.website = create_custom_website(name="BlockedBoard")
+
+    @patch("job_scraper.request_scraper.get_cooldown_remaining", return_value=120)
+    @patch("job_scraper.request_scraper.JobScraper._scrape_custom_website")
+    def test_get_recent_jobs_skips_website_during_cooldown(
+        self, scrape_mock, cooldown_mock
+    ):
+        jobs = JobScraper().get_recent_jobs("us", "python", website_id=self.website.id)
+
+        self.assertEqual(jobs, [])
+        scrape_mock.assert_not_called()
+        self.assertEqual(ScraperExecutionLog.objects.count(), 1)
+        self.assertIn(
+            "Skipped due to anti-bot cooldown",
+            ScraperExecutionLog.objects.first().error_message,
+        )

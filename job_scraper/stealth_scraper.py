@@ -12,10 +12,23 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
+from .anti_bot import (
+    classify_anti_bot_response,
+    clear_block_state,
+    compute_selector_coverage,
+    jitter_sleep,
+    record_block_event,
+    summarize_selector_coverage,
+)
 from .models import CustomWebsite, Job, ScraperExecutionLog
 from .utils import get_continent_from_country
 
 logger = logging.getLogger(__name__)
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+]
 
 
 class StealthScraper:
@@ -46,8 +59,11 @@ class StealthScraper:
         )
 
         options = uc.ChromeOptions()
+        options.add_argument(f"--user-agent={random.choice(USER_AGENTS)}")
+        options.add_argument("--lang=en-US")
+        options.add_argument("--disable-blink-features=AutomationControlled")
         if self.headless:
-            options.add_argument("--headless")
+            options.add_argument("--headless=new")
 
         # Add random viewport to look more authentic
         options.add_argument(
@@ -59,6 +75,9 @@ class StealthScraper:
         error_msg = ""
         screenshot_bytes = None
         html_content = ""
+        detail_fetch_count = 0
+        detail_fetch_limit = 3
+        selector_metrics = ""
 
         try:
             driver = uc.Chrome(options=options)
@@ -68,6 +87,7 @@ class StealthScraper:
                     keywords=keywords, location=location, page=page_num
                 )
                 try:
+                    jitter_sleep(1.5, 3.2)
                     logger.info(
                         "stealth_page_start run_id=%s website_id=%s page=%s url=%s",
                         run_id,
@@ -77,7 +97,8 @@ class StealthScraper:
                     )
                     driver.get(url)
 
-                    time.sleep(random.uniform(3, 6))
+                    jitter_sleep(3.0, 5.5)
+                    self._simulate_browse(driver)
 
                     try:
                         # Wait for the primary selector to ensure page loaded
@@ -107,21 +128,40 @@ class StealthScraper:
                             )
                         break
 
-                    # Check for CAPTCHA manually
-                    content_lower = driver.page_source.lower()
-                    if any(
-                        x in content_lower
-                        for x in ["recaptcha", "hcaptcha", "cloudflare"]
-                    ):
+                    html_content = driver.page_source
+                    soup = BeautifulSoup(html_content, "html.parser")
+                    job_elements = soup.select(website.job_list_selector)
+                    coverage = compute_selector_coverage(
+                        job_elements,
+                        {
+                            "title": website.title_selector,
+                            "company": website.company_selector,
+                            "location": website.location_selector,
+                            "job_link": website.job_link_selector,
+                            "salary": website.salary_selector,
+                            "date": website.date_selector,
+                        },
+                    )
+                    selector_metrics = summarize_selector_coverage(coverage)
+                    anti_bot_result = classify_anti_bot_response(
+                        html_content=html_content,
+                        card_count=len(job_elements),
+                    )
+                    if anti_bot_result["blocked"]:
+                        outcome = record_block_event(website.id)
                         logger.error(
-                            "anti_bot_detected run_id=%s website_id=%s website=%s",
+                            "anti_bot_detected run_id=%s website_id=%s website=%s reason=%s failures=%s",
                             run_id,
                             website.id,
                             website.name,
+                            anti_bot_result["reason"],
+                            outcome["failures"],
                         )
-                        error_msg = "Anti-bot (Cloudflare/CAPTCHA) detected."
+                        error_msg = (
+                            "Anti-bot challenge detected. "
+                            f"{anti_bot_result['reason']} failures={outcome['failures']}"
+                        )
                         try:
-                            html_content = driver.page_source
                             screenshot_bytes = driver.get_screenshot_as_png()
                         except Exception:
                             logger.debug(
@@ -132,15 +172,14 @@ class StealthScraper:
                             )
                         break
 
-                    # Parse with BeautifulSoup
-                    soup = BeautifulSoup(driver.page_source, "html.parser")
-                    job_elements = soup.select(website.job_list_selector)
+                    clear_block_state(website.id)
                     logger.info(
-                        "stealth_page_cards_found run_id=%s website_id=%s page=%s cards=%s",
+                        "stealth_page_cards_found run_id=%s website_id=%s page=%s cards=%s selector_metrics=%s",
                         run_id,
                         website.id,
                         page_num,
                         len(job_elements),
+                        selector_metrics,
                     )
 
                     for element in job_elements:
@@ -208,7 +247,11 @@ class StealthScraper:
 
                             # If we have a detail link and description selector, fetch details
                             # We only do this for new jobs to save time, or if requested
-                            if job_url and website.description_selector:
+                            if (
+                                job_url
+                                and website.description_selector
+                                and detail_fetch_count < detail_fetch_limit
+                            ):
                                 # Check if job already exists with description
                                 if (
                                     not Job.objects.filter(source_url=job_url)
@@ -216,9 +259,11 @@ class StealthScraper:
                                     .exists()
                                 ):
                                     logger.info(f"Fetching description for {job_url}")
+                                    jitter_sleep(0.8, 1.8)
                                     description = self._get_description_selenium(
                                         driver, job_url, website.description_selector
                                     )
+                                    detail_fetch_count += 1
 
                             job_data = {
                                 "title": title.strip(),
@@ -292,8 +337,6 @@ class StealthScraper:
 
         from datetime import datetime
 
-        from django.core.files.base import ContentFile
-
         from .models import Job, ScraperExecutionLog
 
         # Save jobs outside event loop to avoid SynchronousOnlyOperation
@@ -332,7 +375,7 @@ class StealthScraper:
             )
 
         logger.info(
-            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s",
+            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s",
             run_id,
             website.id,
             website.name,
@@ -340,9 +383,22 @@ class StealthScraper:
             len(saved_jobs),
             int((time.monotonic() - started_at) * 1000),
             bool(error_msg),
+            selector_metrics or "n/a",
+            detail_fetch_count,
         )
 
         return saved_jobs
+
+    def _simulate_browse(self, driver):
+        """Introduce small browse-like pauses and scrolling before extraction."""
+        try:
+            driver.execute_script("window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.2));")
+            jitter_sleep(0.4, 1.0)
+            driver.execute_script("window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.45));")
+            jitter_sleep(0.5, 1.1)
+            driver.execute_script("window.scrollTo(0, 0);")
+        except Exception:
+            logger.debug("stealth_browse_simulation_failed", exc_info=True)
 
     def _get_description_selenium(self, driver, job_url, selector):
         """Fetch job description from a specific job URL using Selenium."""
@@ -352,7 +408,7 @@ class StealthScraper:
             driver.switch_to.window(driver.window_handles[-1])
             driver.get(job_url)
 
-            time.sleep(random.uniform(2, 4))
+            jitter_sleep(2.0, 4.0)
 
             # Wait for selector
             try:

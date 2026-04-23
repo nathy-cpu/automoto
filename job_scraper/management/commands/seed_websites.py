@@ -17,7 +17,7 @@ class Command(BaseCommand):
                 "company_selector": '[data-testid="company-name"]',
                 "location_selector": '[data-testid="text-location"]',
                 "salary_selector": '[data-testid="attribute_snippet_salary"], .salary-snippet-container, .salary-snippet, .salaryOnly',
-                "date_selector": "span.date, span.myJobsState, .date",
+                "date_selector": '[data-testid="timing-attribute"]',
                 "job_link_selector": "h2.jobTitle a",
                 "description_selector": "#jobDescriptionText",
                 "use_stealth": True,

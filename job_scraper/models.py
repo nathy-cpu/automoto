@@ -140,7 +140,7 @@ class ScraperExecutionLog(models.Model):
 
     SCRAPER_CHOICES = [
         ("requests", "Standard (Requests)"),
-        ("playwright", "Stealth (Playwright)"),
+        ("playwright", "Stealth (Selenium)"),
         ("api", "JSON API"),
     ]
 

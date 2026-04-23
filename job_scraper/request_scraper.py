@@ -8,7 +8,17 @@ from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
+from django.core.files.base import ContentFile
 
+from .anti_bot import (
+    classify_anti_bot_response,
+    clear_block_state,
+    compute_selector_coverage,
+    get_cooldown_remaining,
+    jitter_sleep,
+    record_block_event,
+    summarize_selector_coverage,
+)
 from .models import CustomWebsite, Job
 
 logger = logging.getLogger(__name__)
@@ -21,7 +31,12 @@ class JobScraper:
         self.session = requests.Session()
         self.session.headers.update(
             {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Cache-Control": "no-cache",
+                "Pragma": "no-cache",
+                "Upgrade-Insecure-Requests": "1",
             }
         )
 
@@ -51,6 +66,42 @@ class JobScraper:
 
         for website in active_websites:
             try:
+                cooldown_remaining = get_cooldown_remaining(website.id)
+                if cooldown_remaining > 0:
+                    logger.warning(
+                        "scrape_website_skipped_cooldown run_id=%s website_id=%s website=%s remaining_s=%s",
+                        run_id,
+                        website.id,
+                        website.name,
+                        cooldown_remaining,
+                    )
+                    from .models import ScraperExecutionLog
+
+                    ScraperExecutionLog.objects.create(
+                        website=website,
+                        scraper_type=(
+                            "api"
+                            if website.is_api
+                            else (
+                                "playwright" if website.use_stealth else "requests"
+                            )
+                        ),
+                        jobs_found=0,
+                        error_message=(
+                            "Skipped due to anti-bot cooldown. "
+                            f"Retry in ~{cooldown_remaining}s."
+                        ),
+                    )
+                    continue
+
+                if website.name.lower() == "indeed" and not website.use_stealth:
+                    logger.warning(
+                        "high_friction_source_requests_mode run_id=%s website_id=%s website=%s",
+                        run_id,
+                        website.id,
+                        website.name,
+                    )
+
                 if website.is_api:
                     from .api_scraper import ApiScraper
 
@@ -113,9 +164,14 @@ class JobScraper:
         error_msg = ""
         html_content = ""
         parsed_jobs_count = 0
+        detail_fetch_count = 0
+        detail_fetch_limit = 3
+        selector_metrics = ""
 
         for page in range(max_pages):
             try:
+                jitter_sleep(1.2, 3.0)
+
                 # Build search URL
                 search_url = website.search_url
                 if "{keywords}" in search_url and keywords:
@@ -126,20 +182,61 @@ class JobScraper:
                     search_url = search_url.replace("{page}", str(page + 1))
 
                 response = self.session.get(search_url, timeout=30)
+                html_content = response.text if hasattr(response, "text") else ""
+                soup = BeautifulSoup(response.content, "html.parser")
+                job_cards = soup.select(website.job_list_selector)
+                coverage = compute_selector_coverage(
+                    job_cards,
+                    {
+                        "title": website.title_selector,
+                        "company": website.company_selector,
+                        "location": website.location_selector,
+                        "job_link": website.job_link_selector,
+                        "salary": website.salary_selector,
+                        "date": website.date_selector,
+                    },
+                )
+                selector_metrics = summarize_selector_coverage(coverage)
+
+                anti_bot_result = classify_anti_bot_response(
+                    response.status_code,
+                    html_content,
+                    len(job_cards),
+                )
+                if anti_bot_result["blocked"]:
+                    outcome = record_block_event(website.id)
+                    error_msg = (
+                        "Anti-bot challenge detected. "
+                        f"{anti_bot_result['reason']} failures={outcome['failures']}"
+                    )
+                    logger.warning(
+                        "requests_antibot_detected website_id=%s website=%s page=%s reason=%s failures=%s",
+                        website.id,
+                        website.name,
+                        page + 1,
+                        anti_bot_result["reason"],
+                        outcome["failures"],
+                    )
+                    break
+
                 try:
                     response.raise_for_status()
                 except Exception as e:
                     error_msg = f"HTTP Error: {e}"
-                    html_content = response.text if hasattr(response, "text") else ""
                     break
-
-                soup = BeautifulSoup(response.content, "html.parser")
-                job_cards = soup.select(website.job_list_selector)
 
                 if not job_cards:
                     error_msg = f"No job cards found matching selector: {website.job_list_selector}"
-                    html_content = response.text
                     break
+
+                clear_block_state(website.id)
+                logger.info(
+                    "requests_selector_coverage website_id=%s website=%s page=%s metrics=%s",
+                    website.id,
+                    website.name,
+                    page + 1,
+                    selector_metrics,
+                )
 
                 for card_number, card in enumerate(job_cards, start=1):
                     try:
@@ -151,11 +248,17 @@ class JobScraper:
                         )
                         if job_data:
                             # If we have a detail link and description selector, fetch details
-                            if job_data.get("job_url") and website.description_selector:
+                            if (
+                                job_data.get("job_url")
+                                and website.description_selector
+                                and detail_fetch_count < detail_fetch_limit
+                            ):
+                                jitter_sleep(0.8, 1.8)
                                 detail_data = self._get_custom_details(
                                     job_data["job_url"], website
                                 )
                                 job_data.update(detail_data)
+                                detail_fetch_count += 1
 
                             # Apply heuristic parsing
                             description = job_data.get("description", "")
@@ -205,7 +308,7 @@ class JobScraper:
                         )
                         continue
 
-                time.sleep(random.uniform(1, 3))
+                jitter_sleep(1.0, 2.4)
 
             except Exception as e:
                 logger.exception(
@@ -218,8 +321,6 @@ class JobScraper:
                 break
 
         from datetime import datetime
-
-        from django.core.files.base import ContentFile
 
         from .models import ScraperExecutionLog
 
@@ -242,12 +343,14 @@ class JobScraper:
             )
 
         logger.info(
-            "requests_scrape_done website_id=%s website=%s jobs_new=%s duration_ms=%s has_error=%s",
+            "requests_scrape_done website_id=%s website=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s",
             website.id,
             website.name,
             len(jobs),
             int((time.monotonic() - started_at) * 1000),
             bool(error_msg),
+            selector_metrics or "n/a",
+            detail_fetch_count,
         )
 
         return jobs
