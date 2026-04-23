@@ -27,6 +27,7 @@
         <!-- Sidebar Filters -->
         <aside class="sidebar">
             <form method="get" action="{% url 'dashboard' %}">
+                {% csrf_token %}
                 <h2>Filters</h2>
 
                 <div class="filter-group">
@@ -108,21 +109,9 @@
                         }
                     }
                 </style>
-            </form>
-
-            <form method="post" action="{% url 'trigger_scrape' %}" id="scrape-form">
-                {% csrf_token %}
-                <input type="hidden" name="q" value="{{ filters.q }}">
-                <input type="hidden" name="continents" value="{{ filters.continents|join:', ' }}">
-                <input type="hidden" name="countries" value="{{ filters.countries|join:', ' }}">
-                <input type="hidden" name="industries" value="{{ filters.industries|join:', ' }}">
-                <input type="hidden" name="expertise" value="{{ filters.expertise }}">
-                {% if filters.is_rfp %}
-                <input type="hidden" name="is_rfp" value="True">
-                {% endif %}
-                <input type="hidden" name="source_id" value="{{ filters.source_id|default:'all' }}">
-
                 <button type="submit" class="btn-apply"
+                    formaction="{% url 'trigger_scrape' %}"
+                    formmethod="post"
                     style="margin-top: 0.5rem; background: linear-gradient(45deg, var(--accent), var(--secondary)); display: flex; justify-content: center; align-items: center; gap: 8px;"
                     onclick="document.getElementById('scrape-spinner-icon').style.display='inline-block'; this.style.pointerEvents='none'; this.style.opacity='0.8';">
                     <span>Run New Scrape</span>

@@ -30,7 +30,10 @@ class ApiScraper:
         error_msg = ""
         json_dump = ""
         keywords = (keywords or "").strip()
+        keyword_terms = [term for term in keywords.lower().split() if term]
         location = (location or "").strip()
+        payload_jobs_count = 0
+        matched_jobs_count = 0
 
         logger.info(
             "api_scrape_start run_id=%s website_id=%s website=%s",
@@ -71,7 +74,7 @@ class ApiScraper:
                 if not job_list or not isinstance(job_list, list):
                     error_msg = f"No job list found at path '{website.api_jobs_path}'"
                 else:
-                    keywords_lower = keywords.lower()
+                    payload_jobs_count = len(job_list)
                     for item in job_list:
                         try:
                             # Generic mapping from JSON to Job fields
@@ -92,15 +95,15 @@ class ApiScraper:
                                 continue
 
                             # Filter by keywords in memory if necessary
-                            if (
-                                keywords_lower
-                                and keywords_lower
-                                not in (
-                                    job_data["title"] + job_data["description"]
-                                ).lower()
+                            searchable_text = (
+                                job_data["title"] + " " + job_data["description"]
+                            ).lower()
+                            if keyword_terms and not all(
+                                term in searchable_text for term in keyword_terms
                             ):
                                 continue
 
+                            matched_jobs_count += 1
                             all_new_jobs.append(
                                 {
                                     "source_url": job_data["source_url"],
@@ -111,8 +114,8 @@ class ApiScraper:
                                         "source_website": website.name,
                                         "description": job_data["description"],
                                         "is_rfp": (
-                                            "contract" in keywords_lower
-                                            or "rfp" in keywords_lower
+                                            "contract" in keyword_terms
+                                            or "rfp" in keyword_terms
                                         ),
                                     },
                                 }
@@ -145,7 +148,12 @@ class ApiScraper:
 
         # Check for silent failures
         if len(all_new_jobs) == 0 and not error_msg:
-            error_msg = "No jobs found. JSON paths may be broken or the API returned empty results."
+            if payload_jobs_count and keyword_terms:
+                error_msg = (
+                    f"API returned {payload_jobs_count} jobs but 0 matched keywords '{keywords}'."
+                )
+            else:
+                error_msg = "No jobs found. JSON paths may be broken or the API returned empty results."
 
         # Log execution
         log = ScraperExecutionLog.objects.create(
@@ -164,11 +172,12 @@ class ApiScraper:
             )
 
         logger.info(
-            "api_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s",
+            "api_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_matched=%s jobs_new=%s duration_ms=%s has_error=%s",
             run_id,
             website.id,
             website.name,
-            len(all_new_jobs),
+            payload_jobs_count,
+            matched_jobs_count,
             len(saved_jobs),
             int((time.monotonic() - started_at) * 1000),
             bool(error_msg),

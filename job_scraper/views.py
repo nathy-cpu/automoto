@@ -1,5 +1,6 @@
 import logging
 import threading
+import re
 from urllib.parse import urlencode
 
 from django.conf import settings
@@ -29,6 +30,92 @@ COUNTRY_ALIASES = {
     "united kingdom": "United Kingdom",
     "uae": "United Arab Emirates",
 }
+
+US_STATE_CODES = {
+    "AL",
+    "AK",
+    "AZ",
+    "AR",
+    "CA",
+    "CO",
+    "CT",
+    "DE",
+    "FL",
+    "GA",
+    "HI",
+    "ID",
+    "IL",
+    "IN",
+    "IA",
+    "KS",
+    "KY",
+    "LA",
+    "ME",
+    "MD",
+    "MA",
+    "MI",
+    "MN",
+    "MS",
+    "MO",
+    "MT",
+    "NE",
+    "NV",
+    "NH",
+    "NJ",
+    "NM",
+    "NY",
+    "NC",
+    "ND",
+    "OH",
+    "OK",
+    "OR",
+    "PA",
+    "RI",
+    "SC",
+    "SD",
+    "TN",
+    "TX",
+    "UT",
+    "VT",
+    "VA",
+    "WA",
+    "WV",
+    "WI",
+    "WY",
+}
+US_STATE_LOCATION_RE = re.compile(
+    r",\s*(?:" + "|".join(sorted(US_STATE_CODES)) + r")\s*$", re.IGNORECASE
+)
+TRUTHY_VALUES = {"1", "true", "yes", "on"}
+
+
+def normalize_job_country(country: str, location: str) -> str:
+    raw_country = (country or "").strip()
+    raw_location = (location or "").strip()
+    upper_country = raw_country.upper()
+    lower_country = raw_country.lower()
+
+    if upper_country in US_STATE_CODES:
+        return "United States"
+
+    canonical = COUNTRY_ALIASES.get(lower_country)
+    if canonical:
+        return canonical
+
+    if raw_location and US_STATE_LOCATION_RE.search(raw_location):
+        return "United States"
+
+    return raw_country
+
+
+def normalize_job_continent(country: str, continent: str, location: str) -> str:
+    normalized_country = normalize_job_country(country, location)
+    raw_continent = (continent or "").strip()
+
+    if normalized_country == "United States":
+        return "North America"
+
+    return raw_continent
 
 
 def dashboard(request: HttpRequest):
@@ -61,11 +148,37 @@ def dashboard(request: HttpRequest):
             normalized.append(value.strip())
         return [value for value in normalized if value]
 
+    def apply_country_filter(qs, values):
+        query = Q()
+        for value in normalize_country_filters(values):
+            query |= Q(country__iexact=value)
+            query |= Q(location__iexact=value)
+
+            if value == "United States":
+                for state_code in US_STATE_CODES:
+                    query |= Q(country__iexact=state_code)
+                query |= Q(location__iregex=US_STATE_LOCATION_RE.pattern)
+
+        return qs.filter(query)
+
+    def apply_continent_filter(qs, values):
+        query = Q()
+        for value in values:
+            query |= Q(continent__iexact=value)
+
+            if value.lower() == "north america":
+                query |= Q(country__iexact="United States")
+                for state_code in US_STATE_CODES:
+                    query |= Q(country__iexact=state_code)
+                query |= Q(location__iregex=US_STATE_LOCATION_RE.pattern)
+
+        return qs.filter(query)
+
     continents = parse_filter(request.GET.get("continents"))
     countries = parse_filter(request.GET.get("countries"))
     industries = parse_filter(request.GET.get("industries"))
-    expertise = request.GET.get("expertise")
-    is_rfp = request.GET.get("is_rfp")
+    expertise = (request.GET.get("expertise") or "").strip()
+    is_rfp = (request.GET.get("is_rfp") or "").strip().lower() in TRUTHY_VALUES
     source_id = request.GET.get("source_id", "")
 
     if source_id and source_id != "all":
@@ -78,12 +191,9 @@ def dashboard(request: HttpRequest):
             source_id = ""
 
     if continents:
-        queryset = apply_case_insensitive_in_filter(queryset, "continent", continents)
+        queryset = apply_continent_filter(queryset, continents)
     if countries:
-        country_filters = normalize_country_filters(countries)
-        queryset = apply_case_insensitive_in_filter(
-            queryset, "country", country_filters
-        )
+        queryset = apply_country_filter(queryset, countries)
     if industries:
         queryset = apply_case_insensitive_in_filter(queryset, "industry", industries)
     if expertise:
@@ -92,7 +202,7 @@ def dashboard(request: HttpRequest):
         queryset = queryset.filter(is_rfp=True)
 
     # Search
-    q = request.GET.get("q")
+    q = (request.GET.get("q") or "").strip()
     if q:
         query = Q()
         for word in q.split():
@@ -117,15 +227,31 @@ def dashboard(request: HttpRequest):
     query_string = query_dict.urlencode()
 
     # Meta data for filters
-    all_continents = Job.objects.values_list("continent", flat=True).distinct()
-    all_countries = Job.objects.values_list("country", flat=True).distinct()
-    all_industries = Job.objects.values_list("industry", flat=True).distinct()
+    all_jobs = Job.objects.only("country", "continent", "location", "industry")
+    all_continents = sorted(
+        {
+            normalize_job_continent(job.country, job.continent, job.location)
+            for job in all_jobs
+            if normalize_job_continent(job.country, job.continent, job.location)
+        }
+    )
+    all_countries = sorted(
+        {
+            normalize_job_country(job.country, job.location)
+            for job in all_jobs
+            if normalize_job_country(job.country, job.location)
+        }
+    )
+    all_industries = sorted(
+        {job.industry for job in all_jobs if job.industry},
+        key=str.lower,
+    )
 
     context = {
         "jobs": page_obj,
-        "all_continents": [c for c in all_continents if c],
-        "all_countries": [c for c in all_countries if c],
-        "all_industries": [i for i in all_industries if i],
+        "all_continents": all_continents,
+        "all_countries": all_countries,
+        "all_industries": all_industries,
         "active_websites": CustomWebsite.objects.filter(is_active=True),
         "filters": {
             "continents": continents,

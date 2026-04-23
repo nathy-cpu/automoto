@@ -21,7 +21,7 @@ from .anti_bot import (
     summarize_selector_coverage,
 )
 from .models import CustomWebsite, Job, ScraperExecutionLog
-from .utils import get_continent_from_country
+from .utils import parse_location_components
 
 logger = logging.getLogger(__name__)
 USER_AGENTS = [
@@ -78,6 +78,7 @@ class StealthScraper:
         detail_fetch_count = 0
         detail_fetch_limit = 3
         selector_metrics = ""
+        card_parse_failures = 0
 
         try:
             driver = uc.Chrome(options=options)
@@ -307,6 +308,7 @@ class StealthScraper:
                             )
 
                         except Exception:
+                            card_parse_failures += 1
                             logger.exception(
                                 "stealth_card_parse_failed run_id=%s website_id=%s website=%s",
                                 run_id,
@@ -335,10 +337,6 @@ class StealthScraper:
             if driver:
                 driver.quit()
 
-        from datetime import datetime
-
-        from .models import Job, ScraperExecutionLog
-
         # Save jobs outside event loop to avoid SynchronousOnlyOperation
         saved_jobs = []
         for job_data in all_new_jobs:
@@ -351,7 +349,12 @@ class StealthScraper:
 
         # Check for silent failures
         if len(all_new_jobs) == 0 and not error_msg:
-            error_msg = "No jobs found. CSS selectors may be outdated or the site is blocking silently."
+            if card_parse_failures:
+                error_msg = (
+                    f"Parsed cards but failed to extract/save {card_parse_failures} cards."
+                )
+            else:
+                error_msg = "No jobs found. CSS selectors may be outdated or the site is blocking silently."
 
         log = ScraperExecutionLog.objects.create(
             website=website,
@@ -375,7 +378,7 @@ class StealthScraper:
             )
 
         logger.info(
-            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s",
+            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s card_parse_failures=%s",
             run_id,
             website.id,
             website.name,
@@ -385,6 +388,7 @@ class StealthScraper:
             bool(error_msg),
             selector_metrics or "n/a",
             detail_fetch_count,
+            card_parse_failures,
         )
 
         return saved_jobs
@@ -454,20 +458,10 @@ class StealthScraper:
 
     def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
         """Apply heuristic parsing to fill in missing fields."""
-        loc_text = job_data.get("location", "")
-        city = ""
-        country = ""
-        if loc_text:
-            if "," in loc_text:
-                parts = loc_text.split(",")
-                city = parts[0].strip()
-                country = parts[-1].strip()
-            else:
-                country = loc_text.strip()
-
-        from .utils import get_continent_from_country
-
-        continent = get_continent_from_country(country) if country else ""
+        geo = parse_location_components(job_data.get("location", ""))
+        city = geo["city"]
+        country = geo["country"]
+        continent = geo["continent"]
 
         job_data["city"] = city
         job_data["country"] = country

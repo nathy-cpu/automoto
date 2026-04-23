@@ -17,6 +17,8 @@ from job_scraper.api_scraper import ApiScraper
 from job_scraper.apollo_client import ApolloClient
 from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
 from job_scraper.request_scraper import JobScraper
+from job_scraper.stealth_scraper import StealthScraper
+from job_scraper.utils import parse_location_components
 
 
 def create_custom_website(**overrides):
@@ -93,6 +95,69 @@ class DashboardViewTests(TestCase):
         self.assertEqual(
             response.context["jobs"].object_list[0].country, "United States"
         )
+
+    def test_dashboard_scrape_button_posts_current_filter_form(self):
+        response = self.client.get(reverse("dashboard"), {"source_id": self.indeed.id})
+
+        self.assertContains(
+            response,
+            f'formaction="{reverse("trigger_scrape")}"',
+        )
+        self.assertContains(response, 'formmethod="post"')
+        self.assertNotContains(response, 'id="scrape-form"')
+
+    def test_dashboard_country_filter_treats_us_state_codes_as_united_states(self):
+        Job.objects.create(
+            title="QA Engineer",
+            company="Gamma",
+            location="San Jose, CA",
+            country="CA",
+            continent="North America",
+            description="Testing role",
+            source_website="LinkedIn",
+        )
+
+        response = self.client.get(reverse("dashboard"), {"countries": "us"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["jobs"].paginator.count, 2)
+
+    def test_dashboard_continent_filter_treats_us_state_codes_as_north_america(self):
+        Job.objects.create(
+            title="Support Engineer",
+            company="Delta",
+            location="Austin, TX",
+            country="TX",
+            continent="Europe",
+            description="Support role",
+            source_website="LinkedIn",
+        )
+
+        response = self.client.get(
+            reverse("dashboard"), {"continents": "North America"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        titles = {job.title for job in response.context["jobs"].object_list}
+        self.assertIn("Support Engineer", titles)
+
+    def test_dashboard_filter_options_normalize_us_state_codes(self):
+        Job.objects.create(
+            title="Platform Engineer",
+            company="Echo",
+            location="Atlanta, GA",
+            country="GA",
+            continent="Africa",
+            description="Platform work",
+            source_website="LinkedIn",
+        )
+
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertIn("United States", response.context["all_countries"])
+        self.assertNotIn("GA", response.context["all_countries"])
+        self.assertIn("North America", response.context["all_continents"])
+        self.assertNotIn("Africa", response.context["all_continents"])
 
 
 class TriggerScrapeViewTests(TestCase):
@@ -171,6 +236,34 @@ class RequestScraperEnrichmentTests(TestCase):
         self.assertEqual(enriched["country"], "Germany")
         self.assertTrue(enriched["continent"])
 
+    def test_enrich_job_data_normalizes_us_state_location(self):
+        scraper = JobScraper()
+
+        enriched = scraper._enrich_job_data(
+            {"location": "Austin, TX", "title": "Engineer", "company": "Acme"},
+            "",
+            "python",
+        )
+
+        self.assertEqual(enriched["city"], "Austin")
+        self.assertEqual(enriched["country"], "United States")
+        self.assertEqual(enriched["continent"], "North America")
+
+
+class GeographyUtilsTests(TestCase):
+    def test_parse_location_components_handles_bare_state_code(self):
+        parsed = parse_location_components("TX")
+
+        self.assertEqual(parsed["country"], "United States")
+        self.assertEqual(parsed["continent"], "North America")
+
+    def test_parse_location_components_handles_region_strings(self):
+        europe = parse_location_components("Europe")
+        emea = parse_location_components("EMEA")
+
+        self.assertEqual(europe["continent"], "Europe")
+        self.assertEqual(emea["continent"], "Europe")
+
 
 class AntiBotMitigationTests(TestCase):
     def tearDown(self):
@@ -245,6 +338,31 @@ class ApiScraperLoggingTests(TestCase):
         self.assertIn("API Request Failed", log.error_message)
         self.assertEqual(log.scraper_type, "api")
 
+    @patch("job_scraper.api_scraper.requests.get")
+    def test_api_keyword_filter_matches_split_terms_not_exact_phrase(self, get_mock):
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = {
+            "data": [
+                {
+                    "title": "Software Engineer",
+                    "company": "Acme",
+                    "company_name": "Acme",
+                    "location": "Remote",
+                    "description": "Contract role building APIs",
+                    "url": "https://example.com/jobs/1",
+                }
+            ]
+        }
+        response.text = '{"data": [{"title": "Software Engineer"}]}'
+        get_mock.return_value = response
+
+        jobs = ApiScraper().scrape(self.website, "software contract", "us")
+
+        self.assertEqual(len(jobs), 1)
+        self.assertEqual(ScraperExecutionLog.objects.count(), 1)
+        self.assertEqual(ScraperExecutionLog.objects.first().error_message, "")
+
 
 @override_settings(DEBUG_ENRICHMENT=False)
 class ApolloClientTests(TestCase):
@@ -303,4 +421,52 @@ class RequestScraperCooldownTests(TestCase):
         self.assertIn(
             "Skipped due to anti-bot cooldown",
             ScraperExecutionLog.objects.first().error_message,
+        )
+
+
+class StealthScraperRegressionTests(TestCase):
+    def setUp(self):
+        self.website = create_custom_website(
+            name="LinkedIn",
+            base_url="https://www.linkedin.com",
+            search_url="https://www.linkedin.com/jobs/search?keywords={keywords}&location={location}&f_TPR=r86400",
+            job_list_selector=".base-search-card",
+            title_selector=".base-search-card__title",
+            company_selector=".base-search-card__subtitle",
+            location_selector=".job-search-card__location",
+            salary_selector=".job-search-card__salary-info",
+            date_selector=".job-search-card__listdate, .job-search-card__listdate--new",
+            job_link_selector=".base-card__full-link",
+            description_selector=".show-more-less-html__markup, .description__text",
+            use_stealth=True,
+        )
+
+    @patch("job_scraper.stealth_scraper.jitter_sleep")
+    @patch("job_scraper.stealth_scraper.uc.Chrome")
+    def test_scrape_parses_cards_without_local_job_scope_failure(
+        self, chrome_mock, sleep_mock
+    ):
+        with open(
+            "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+        ) as fh:
+            html = fh.read()
+
+        driver = Mock()
+        driver.page_source = html
+        driver.window_handles = ["main"]
+        driver.get_screenshot_as_png.return_value = b"png"
+        chrome_mock.return_value = driver
+
+        jobs = StealthScraper(headless=True).scrape(
+            self.website, keywords="", location="us", max_pages=1
+        )
+
+        self.assertGreater(len(jobs), 0)
+        self.assertTrue(Job.objects.filter(source_website="LinkedIn").exists())
+        latest_log = ScraperExecutionLog.objects.order_by("-timestamp").first()
+        self.assertNotIn(
+            "Parsed cards but failed to extract/save", latest_log.error_message
         )
