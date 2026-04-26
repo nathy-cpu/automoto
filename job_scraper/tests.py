@@ -446,9 +446,9 @@ class StealthScraperRegressionTests(TestCase):
         )
 
     @patch("job_scraper.stealth_scraper.jitter_sleep")
-    @patch("job_scraper.stealth_scraper.Driver")
+    @patch("job_scraper.stealth_scraper.SB")
     def test_scrape_parses_cards_without_local_job_scope_failure(
-        self, driver_factory_mock, sleep_mock
+        self, sb_mock, sleep_mock
     ):
         with open(
             "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
@@ -459,11 +459,14 @@ class StealthScraperRegressionTests(TestCase):
             html = fh.read()
 
         driver = Mock()
-        driver.page_source = html
-        driver.get_page_source.return_value = html
-        driver.window_handles = ["main"]
         driver.get_screenshot_as_png.return_value = b"png"
-        driver_factory_mock.return_value = driver
+        driver.window_handles = ["main"]
+
+        sb = Mock()
+        sb.get_page_source.return_value = html
+        sb.driver = driver
+
+        sb_mock.return_value.__enter__.return_value = sb
 
         jobs = StealthScraper(headless=True).scrape(
             self.website, keywords="", location="us", max_pages=1
@@ -477,10 +480,10 @@ class StealthScraperRegressionTests(TestCase):
         )
 
     @patch("job_scraper.stealth_scraper.jitter_sleep")
-    @patch("job_scraper.stealth_scraper.Driver")
+    @patch("job_scraper.stealth_scraper.SB")
     @patch.object(StealthScraper, "_get_description_selenium")
     def test_scrape_disables_detail_fetch_after_invalid_session(
-        self, get_description_mock, driver_factory_mock, sleep_mock
+        self, get_description_mock, sb_mock, sleep_mock
     ):
         with open(
             "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
@@ -491,11 +494,14 @@ class StealthScraperRegressionTests(TestCase):
             html = fh.read()
 
         driver = Mock()
-        driver.page_source = html
-        driver.get_page_source.return_value = html
-        driver.window_handles = ["main"]
         driver.get_screenshot_as_png.return_value = b"png"
-        driver_factory_mock.return_value = driver
+        driver.window_handles = ["main"]
+
+        sb = Mock()
+        sb.get_page_source.return_value = html
+        sb.driver = driver
+
+        sb_mock.return_value.__enter__.return_value = sb
         get_description_mock.side_effect = InvalidSessionIdException("dead session")
 
         jobs = StealthScraper(headless=True).scrape(
