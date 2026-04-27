@@ -9,7 +9,10 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      - PYTHONUNBUFFERED=1
     command: python manage.py runserver 0.0.0.0:8000
+    restart: unless-stopped
 
   scheduler:
     build: .
@@ -17,9 +20,13 @@ services:
       - .:/app
     env_file:
       - .env
+    environment:
+      - PYTHONUNBUFFERED=1
     command: python manage.py run_scheduler
     depends_on:
       - web
+    restart: unless-stopped
 
 volumes:
-  db_data:
+  static_volume:
+  media_volume:

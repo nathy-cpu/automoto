@@ -56,6 +56,16 @@ Or:
 venv/bin/python manage.py runserver 0.0.0.0:8000
 ```
 
+### Running with Docker
+
+You can also run the entire stack using Docker and Docker Compose:
+
+```bash
+docker-compose up --build
+```
+
+This will automatically handle all system dependencies, including Google Chrome for stealth scraping.
+
 ## URLs
 
 - App: `http://localhost:8000`

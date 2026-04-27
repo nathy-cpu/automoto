@@ -4,8 +4,9 @@ import time
 import uuid
 from datetime import datetime
 
-from bs4 import BeautifulSoup
 from django.core.files.base import ContentFile
+
+from bs4 import BeautifulSoup
 from seleniumbase import SB
 
 from .anti_bot import (
@@ -84,8 +85,23 @@ class StealthScraper:
                         self._open_url(driver, url)
 
                         jitter_sleep(3.0, 5.5)
-                        self._solve_captcha(driver)
-                        self._simulate_browse(driver)
+                        # self._simulate_browse(driver)
+
+                        try:
+                            self._solve_captcha(driver)
+                            logger.info(
+                                "captcha_solver_attempted run_id=%s website_id=%s page=%s",
+                                run_id,
+                                website.id,
+                                page_num,
+                            )
+                        except Exception as captcha_err:
+                            logger.warning(
+                                "captcha_solver_failed run_id=%s error=%s",
+                                run_id,
+                                website.id,
+                                str(captcha_err),
+                            )
 
                         try:
                             # Wait for the primary selector to ensure page loaded
@@ -409,9 +425,6 @@ class StealthScraper:
         except Exception:
             logger.debug("stealth_browse_simulation_failed", exc_info=True)
 
-    def _solve_captcha(self, driver):
-        driver.solve_captcha()
-
     def _session(self):
         width = random.randint(1200, 1920)
         height = random.randint(800, 1080)
@@ -424,10 +437,17 @@ class StealthScraper:
             locale_code="en-US",
             window_size=f"{width},{height}",
             chromium_arg="--disable-blink-features=AutomationControlled",
+            test=True,
         )
 
     def _open_url(self, driver, url):
-        driver.open(url)
+        driver.activate_cdp_mode(url)
+        # driver.sleep(2)
+        # driver.solve_captcha_if_detected()
+        # driver.open(url)
+
+    def _solve_captcha(self, driver):
+        driver.solve_captcha()
 
     def _wait_for_selector(self, driver, selector, timeout):
         driver.wait_for_element_present(selector, by="css selector", timeout=timeout)
