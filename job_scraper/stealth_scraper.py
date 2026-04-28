@@ -64,7 +64,9 @@ class StealthScraper:
 
         try:
             with self._driver_session() as driver:
-                self._scrape_pages(driver, website, keywords, location, max_pages, state)
+                self._scrape_pages(
+                    driver, website, keywords, location, max_pages, state
+                )
         except Exception as exc:
             state["error_msg"] = f"Driver Initialization/Execution Failed: {exc}"
             logger.exception(
@@ -149,7 +151,8 @@ class StealthScraper:
             self._open_url(driver, url)
             jitter_sleep(3.0, 5.5)
 
-            self._attempt_captcha_solver(driver, website, page_num)
+            if not self._attempt_captcha_solver(driver, website, page_num, state):
+                return False
             if not self._wait_for_primary_selector(driver, website, state):
                 return False
 
@@ -182,15 +185,27 @@ class StealthScraper:
             )
             return False
 
-    def _attempt_captcha_solver(self, driver, website, page_num):
+    def _attempt_captcha_solver(self, driver, website, page_num, state):
+        anti_bot_result = self._challenge_state(driver)
+        if not anti_bot_result["blocked"]:
+            return True
+
         try:
             self._solve_captcha(driver)
+            jitter_sleep(2.0, 4.0)
+            anti_bot_result = self._challenge_state(driver)
             logger.info(
-                "captcha_solver_attempted run_id=%s website_id=%s page=%s",
+                "captcha_solver_attempted run_id=%s website_id=%s page=%s blocked_after_attempt=%s reason=%s",
                 self._run_id,
                 website.id,
                 page_num,
+                anti_bot_result["blocked"],
+                anti_bot_result["reason"],
             )
+            if anti_bot_result["blocked"]:
+                self._record_challenge_failure(driver, website, state, anti_bot_result)
+                return False
+            return True
         except Exception as exc:
             logger.warning(
                 "captcha_solver_failed run_id=%s website_id=%s error=%s",
@@ -198,6 +213,9 @@ class StealthScraper:
                 website.id,
                 str(exc),
             )
+            self._capture_artifacts(driver, website, state)
+            state["error_msg"] = f"Captcha solver failed: {exc}"
+            return False
 
     def _wait_for_primary_selector(self, driver, website, state):
         try:
@@ -242,6 +260,26 @@ class StealthScraper:
         self._capture_artifacts(self._driver, website, state)
         return True
 
+    def _record_challenge_failure(self, driver, website, state, anti_bot_result):
+        outcome = record_block_event(website.id)
+        logger.error(
+            "captcha_challenge_persisted run_id=%s website_id=%s website=%s reason=%s failures=%s",
+            self._run_id,
+            website.id,
+            website.name,
+            anti_bot_result["reason"],
+            outcome["failures"],
+        )
+        state["error_msg"] = (
+            "Captcha challenge still present after solver attempt. "
+            f"{anti_bot_result['reason']} failures={outcome['failures']}"
+        )
+        self._capture_artifacts(driver, website, state)
+
+    def _challenge_state(self, driver):
+        html_content = self._get_page_source(driver)
+        return classify_anti_bot_response(html_content=html_content, card_count=0)
+
     def _capture_artifacts(self, driver, website, state):
         try:
             state["html_content"] = self._get_page_source(driver)
@@ -270,13 +308,17 @@ class StealthScraper:
 
     def _collect_jobs_from_page(self, driver, website, keywords, job_elements, state):
         for element in job_elements:
-            job_entry = self._parse_job_element(driver, website, keywords, element, state)
+            job_entry = self._parse_job_element(
+                driver, website, keywords, element, state
+            )
             if job_entry is not None:
                 state["all_new_jobs"].append(job_entry)
 
     def _parse_job_element(self, driver, website, keywords, element, state):
         try:
-            title = self._select_text(element, website.title_selector, prefer_title=True)
+            title = self._select_text(
+                element, website.title_selector, prefer_title=True
+            )
             company = self._select_text(element, website.company_selector)
             loc_text = self._select_text(element, website.location_selector)
             job_url = self._select_url(element, website)
@@ -374,7 +416,9 @@ class StealthScraper:
         if error_msg:
             return error_msg
         if jobs_seen == 0 and card_parse_failures:
-            return f"Parsed cards but failed to extract/save {card_parse_failures} cards."
+            return (
+                f"Parsed cards but failed to extract/save {card_parse_failures} cards."
+            )
         if jobs_seen == 0:
             return "No jobs found. CSS selectors may be outdated or the site is blocking silently."
         return ""
@@ -457,7 +501,7 @@ class StealthScraper:
             logger.debug("stealth_browse_simulation_failed", exc_info=True)
 
     def _open_url(self, driver, url):
-        driver.open(url)
+        driver.activate_cdp_mode(url)
 
     def _solve_captcha(self, driver):
         try:

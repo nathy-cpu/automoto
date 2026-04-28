@@ -457,6 +457,41 @@ class StealthScraperRegressionTests(TestCase):
             description_selector=".show-more-less-html__markup, .description__text",
             use_stealth=True,
         )
+        clear_block_state(self.website.id)
+
+    @patch("job_scraper.stealth_scraper.jitter_sleep")
+    @patch("job_scraper.stealth_scraper.SB")
+    @patch.object(StealthScraper, "_wait_for_selector")
+    @patch.object(StealthScraper, "_solve_captcha")
+    def test_scrape_aborts_when_captcha_persists_after_solver_attempt(
+        self, solve_captcha_mock, wait_for_selector_mock, sb_mock, sleep_mock
+    ):
+        blocked_html = (
+            '<html><body><button>Verify you are human</button>'
+            '<div class="captcha-delivery"></div></body></html>'
+        )
+
+        driver = Mock()
+        driver.get_screenshot_as_png.return_value = b"png"
+        driver.window_handles = ["main"]
+
+        sb = Mock()
+        sb.get_page_source.side_effect = [blocked_html, blocked_html, blocked_html]
+        sb.driver = driver
+        sb_mock.return_value.__enter__.return_value = sb
+
+        jobs = StealthScraper(headless=True).scrape(
+            self.website, keywords="software", location="europe", max_pages=1
+        )
+
+        self.assertEqual(jobs, [])
+        solve_captcha_mock.assert_called_once()
+        wait_for_selector_mock.assert_not_called()
+        latest_log = ScraperExecutionLog.objects.order_by("-timestamp").first()
+        self.assertIn(
+            "Captcha challenge still present after solver attempt",
+            latest_log.error_message,
+        )
 
     @patch("job_scraper.stealth_scraper.jitter_sleep")
     @patch("job_scraper.stealth_scraper.SB")
@@ -526,7 +561,9 @@ class StealthScraperRegressionTests(TestCase):
 
     @patch("job_scraper.stealth_scraper.jitter_sleep")
     @patch("job_scraper.stealth_scraper.SB")
-    def test_stealth_scraper_resets_private_run_id_after_scrape(self, sb_mock, sleep_mock):
+    def test_stealth_scraper_resets_private_run_id_after_scrape(
+        self, sb_mock, sleep_mock
+    ):
         with open(
             "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
             "r",

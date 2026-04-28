@@ -159,7 +159,9 @@ class ApiScraper:
             searchable_text = (
                 job_data["title"] + " " + job_data["description"]
             ).lower()
-            if keyword_terms and not all(term in searchable_text for term in keyword_terms):
+            if keyword_terms and not all(
+                term in searchable_text for term in keyword_terms
+            ):
                 return None
 
             return {
@@ -170,9 +172,7 @@ class ApiScraper:
                     "location": job_data["location"].strip(),
                     "source_website": website.name,
                     "description": job_data["description"],
-                    "is_rfp": (
-                        "contract" in keyword_terms or "rfp" in keyword_terms
-                    ),
+                    "is_rfp": ("contract" in keyword_terms or "rfp" in keyword_terms),
                 },
             }
         except Exception:
@@ -207,7 +207,9 @@ class ApiScraper:
             return ""
         if payload_jobs_count and keywords:
             return f"API returned {payload_jobs_count} jobs but 0 matched keywords '{keywords}'."
-        return "No jobs found. JSON paths may be broken or the API returned empty results."
+        return (
+            "No jobs found. JSON paths may be broken or the API returned empty results."
+        )
 
     def _log_execution(
         self,
