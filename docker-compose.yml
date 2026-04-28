@@ -12,6 +12,7 @@ services:
       - PYTHONUNBUFFERED=1
     command: python manage.py runserver 0.0.0.0:8000
     restart: unless-stopped
+    shm_size: "2gb"
 
   scheduler:
     build: .
@@ -25,6 +26,7 @@ services:
     depends_on:
       - web
     restart: unless-stopped
+    shm_size: "2gb"
 
 volumes:
   static_volume:

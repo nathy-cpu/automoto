@@ -97,7 +97,7 @@ class StealthScraper:
                             )
                         except Exception as captcha_err:
                             logger.warning(
-                                "captcha_solver_failed run_id=%s error=%s",
+                                "captcha_solver_failed run_id=%s website_id=%s error=%s",
                                 run_id,
                                 website.id,
                                 str(captcha_err),
@@ -436,18 +436,24 @@ class StealthScraper:
             agent=random.choice(USER_AGENTS),
             locale_code="en-US",
             window_size=f"{width},{height}",
-            chromium_arg="--disable-blink-features=AutomationControlled",
+            chromium_arg="--disable-blink-features=AutomationControlled,--disable-dev-shm-usage",
             test=True,
         )
 
     def _open_url(self, driver, url):
-        driver.activate_cdp_mode(url)
+        # Using uc_open_with_reconnect which is the recommended way to bypass Cloudflare Turnstile
+        driver.uc_open_with_reconnect(url, reconnect_time=5)
         # driver.sleep(2)
         # driver.solve_captcha_if_detected()
         # driver.open(url)
 
     def _solve_captcha(self, driver):
-        driver.solve_captcha()
+        try:
+            # Try SeleniumBase's undetected GUI clicker for Cloudflare
+            driver.uc_gui_click_captcha()
+        except Exception:
+            # Fallback to standard solve_captcha
+            driver.solve_captcha()
 
     def _wait_for_selector(self, driver, selector, timeout):
         driver.wait_for_element_present(selector, by="css selector", timeout=timeout)
