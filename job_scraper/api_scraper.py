@@ -19,146 +19,208 @@ class ApiScraper:
     Bypasses browser stealth scraping entirely for faster, reliable data fetching.
     """
 
+    def __init__(self, run_id=None):
+        self._run_id = run_id
+
     def scrape(self, website: CustomWebsite, keywords: str, location: str) -> List[Job]:
-        """
-        Fetch jobs from a JSON API endpoint and map keys to Job model.
-        """
-        run_id = uuid.uuid4().hex[:8]
-        started_at = time.monotonic()
-        all_new_jobs = []
-        saved_jobs = []
-        error_msg = ""
-        json_dump = ""
         keywords = (keywords or "").strip()
-        keyword_terms = [term for term in keywords.lower().split() if term]
         location = (location or "").strip()
+        started_at = time.monotonic()
+        saved_jobs = []
+        json_dump = ""
+        error_msg = ""
         payload_jobs_count = 0
         matched_jobs_count = 0
+        keyword_terms = [term for term in keywords.lower().split() if term]
 
+        self._ensure_run_id()
+        self._log_scrape_start(website)
+
+        try:
+            response = self._fetch_response(website, keywords, location)
+            data, json_dump, error_msg = self._parse_response(response)
+
+            job_entries = []
+            if not error_msg:
+                job_entries, payload_jobs_count, matched_jobs_count, error_msg = (
+                    self._collect_job_entries(website, data, keyword_terms, keywords)
+                )
+
+            saved_jobs = self._save_jobs(job_entries)
+            error_msg = self._finalize_error_message(
+                error_msg,
+                payload_jobs_count,
+                matched_jobs_count,
+                keywords,
+            )
+            self._log_execution(
+                website,
+                len(saved_jobs),
+                error_msg,
+                json_dump,
+            )
+            self._log_scrape_done(
+                website,
+                payload_jobs_count,
+                matched_jobs_count,
+                len(saved_jobs),
+                started_at,
+                bool(error_msg),
+            )
+            return saved_jobs
+        except Exception as exc:
+            error_msg = f"Unexpected API error: {exc}"
+            logger.exception(
+                "api_scrape_failed run_id=%s website_id=%s website=%s",
+                self._run_id,
+                website.id,
+                website.name,
+            )
+            self._log_execution(website, len(saved_jobs), error_msg, json_dump)
+            self._log_scrape_done(
+                website,
+                payload_jobs_count,
+                matched_jobs_count,
+                len(saved_jobs),
+                started_at,
+                True,
+            )
+            return saved_jobs
+        finally:
+            self._run_id = None
+
+    def _ensure_run_id(self):
+        if not self._run_id:
+            self._run_id = uuid.uuid4().hex[:8]
+
+    def _log_scrape_start(self, website: CustomWebsite):
         logger.info(
             "api_scrape_start run_id=%s website_id=%s website=%s",
-            run_id,
+            self._run_id,
             website.id,
             website.name,
         )
 
+    def _fetch_response(self, website: CustomWebsite, keywords: str, location: str):
+        url = website.search_url.format(keywords=keywords, location=location, page=1)
+        logger.info(
+            "api_fetch_start run_id=%s website_id=%s url=%s",
+            self._run_id,
+            website.id,
+            url,
+        )
+        return requests.get(url, timeout=30)
+
+    def _parse_response(self, response):
+        json_dump = response.text if hasattr(response, "text") else ""
         try:
-            # Build URL - APIs often use simple query params
-            url = website.search_url.format(
-                keywords=keywords, location=location, page=1
-            )
+            response.raise_for_status()
+            return response.json(), json_dump, ""
+        except Exception as exc:
+            return None, json_dump, f"API Request Failed: {exc}"
 
-            logger.info(
-                "api_fetch_start run_id=%s website_id=%s url=%s",
-                run_id,
-                website.id,
-                url,
-            )
-            response = requests.get(url, timeout=30)
+    def _collect_job_entries(
+        self,
+        website: CustomWebsite,
+        data,
+        keyword_terms,
+        keywords: str,
+    ):
+        job_list = self._get_nested_data(data, website.api_jobs_path)
+        if not job_list or not isinstance(job_list, list):
+            return [], 0, 0, f"No job list found at path '{website.api_jobs_path}'"
 
-            try:
-                response.raise_for_status()
-                data = response.json()
-                if hasattr(response, "text"):
-                    json_dump = response.text
-            except Exception as e:
-                error_msg = f"API Request Failed: {e}"
-                if hasattr(response, "text"):
-                    json_dump = response.text
-                data = None
+        payload_jobs_count = len(job_list)
+        matched_jobs_count = 0
+        job_entries = []
 
-            if not error_msg:
-                # Extract list of jobs using path
-                job_list = self._get_nested_data(data, website.api_jobs_path)
+        for item in job_list:
+            job_entry = self._build_job_entry(website, item, keyword_terms)
+            if job_entry is None:
+                continue
+            matched_jobs_count += 1
+            job_entries.append(job_entry)
 
-                if not job_list or not isinstance(job_list, list):
-                    error_msg = f"No job list found at path '{website.api_jobs_path}'"
-                else:
-                    payload_jobs_count = len(job_list)
-                    for item in job_list:
-                        try:
-                            # Generic mapping from JSON to Job fields
-                            job_data = {
-                                "title": self._get_val(item, website.api_title_key),
-                                "company": self._get_val(item, website.api_company_key),
-                                "location": self._get_val(
-                                    item, website.api_location_key
-                                ),
-                                "description": self._get_val(
-                                    item, website.api_description_key
-                                ),
-                                "source_url": self._get_val(item, website.api_url_key),
-                            }
+        return job_entries, payload_jobs_count, matched_jobs_count, ""
 
-                            # Basic validation
-                            if not job_data["title"] or not job_data["source_url"]:
-                                continue
+    def _build_job_entry(self, website: CustomWebsite, item, keyword_terms):
+        try:
+            job_data = {
+                "title": self._get_val(item, website.api_title_key),
+                "company": self._get_val(item, website.api_company_key),
+                "location": self._get_val(item, website.api_location_key),
+                "description": self._get_val(item, website.api_description_key),
+                "source_url": self._get_val(item, website.api_url_key),
+            }
 
-                            # Filter by keywords in memory if necessary
-                            searchable_text = (
-                                job_data["title"] + " " + job_data["description"]
-                            ).lower()
-                            if keyword_terms and not all(
-                                term in searchable_text for term in keyword_terms
-                            ):
-                                continue
+            if not job_data["title"] or not job_data["source_url"]:
+                return None
 
-                            matched_jobs_count += 1
-                            all_new_jobs.append(
-                                {
-                                    "source_url": job_data["source_url"],
-                                    "defaults": {
-                                        "title": job_data["title"].strip(),
-                                        "company": job_data["company"].strip(),
-                                        "location": job_data["location"].strip(),
-                                        "source_website": website.name,
-                                        "description": job_data["description"],
-                                        "is_rfp": (
-                                            "contract" in keyword_terms
-                                            or "rfp" in keyword_terms
-                                        ),
-                                    },
-                                }
-                            )
+            searchable_text = (
+                job_data["title"] + " " + job_data["description"]
+            ).lower()
+            if keyword_terms and not all(term in searchable_text for term in keyword_terms):
+                return None
 
-                        except Exception:
-                            logger.exception(
-                                "api_item_parse_failed run_id=%s website_id=%s",
-                                run_id,
-                                website.id,
-                            )
-
-        except Exception as e:
-            error_msg = f"Unexpected API error: {e}"
+            return {
+                "source_url": job_data["source_url"],
+                "defaults": {
+                    "title": job_data["title"].strip(),
+                    "company": job_data["company"].strip(),
+                    "location": job_data["location"].strip(),
+                    "source_website": website.name,
+                    "description": job_data["description"],
+                    "is_rfp": (
+                        "contract" in keyword_terms or "rfp" in keyword_terms
+                    ),
+                },
+            }
+        except Exception:
             logger.exception(
-                "api_scrape_failed run_id=%s website_id=%s website=%s",
-                run_id,
+                "api_item_parse_failed run_id=%s website_id=%s",
+                self._run_id,
                 website.id,
-                website.name,
             )
+            return None
 
-        # Save results and log
-        for j_data in all_new_jobs:
+    def _save_jobs(self, job_entries):
+        saved_jobs = []
+        for job_entry in job_entries:
             job, created = Job.objects.update_or_create(
-                source_url=j_data["source_url"],
-                defaults=j_data["defaults"],
+                source_url=job_entry["source_url"],
+                defaults=job_entry["defaults"],
             )
             if created:
                 saved_jobs.append(job)
+        return saved_jobs
 
-        # Check for silent failures
-        if len(all_new_jobs) == 0 and not error_msg:
-            if payload_jobs_count and keyword_terms:
-                error_msg = f"API returned {payload_jobs_count} jobs but 0 matched keywords '{keywords}'."
-            else:
-                error_msg = "No jobs found. JSON paths may be broken or the API returned empty results."
+    def _finalize_error_message(
+        self,
+        error_msg: str,
+        payload_jobs_count: int,
+        matched_jobs_count: int,
+        keywords: str,
+    ):
+        if error_msg:
+            return error_msg
+        if matched_jobs_count:
+            return ""
+        if payload_jobs_count and keywords:
+            return f"API returned {payload_jobs_count} jobs but 0 matched keywords '{keywords}'."
+        return "No jobs found. JSON paths may be broken or the API returned empty results."
 
-        # Log execution
+    def _log_execution(
+        self,
+        website: CustomWebsite,
+        jobs_found: int,
+        error_message: str,
+        json_dump: str,
+    ):
         log = ScraperExecutionLog.objects.create(
             website=website,
             scraper_type="api",
-            jobs_found=len(all_new_jobs),
-            error_message=error_msg,
+            jobs_found=jobs_found,
+            error_message=error_message,
         )
 
         if json_dump:
@@ -169,19 +231,26 @@ class ApiScraper:
                 save=True,
             )
 
+    def _log_scrape_done(
+        self,
+        website: CustomWebsite,
+        payload_jobs_count: int,
+        matched_jobs_count: int,
+        saved_jobs_count: int,
+        started_at: float,
+        has_error: bool,
+    ):
         logger.info(
             "api_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_matched=%s jobs_new=%s duration_ms=%s has_error=%s",
-            run_id,
+            self._run_id,
             website.id,
             website.name,
             payload_jobs_count,
             matched_jobs_count,
-            len(saved_jobs),
+            saved_jobs_count,
             int((time.monotonic() - started_at) * 1000),
-            bool(error_msg),
+            has_error,
         )
-
-        return saved_jobs
 
     def _get_nested_data(self, data, path):
         if not path:

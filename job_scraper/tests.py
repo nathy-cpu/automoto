@@ -367,6 +367,19 @@ class ApiScraperLoggingTests(TestCase):
         self.assertEqual(ScraperExecutionLog.objects.count(), 1)
         self.assertEqual(ScraperExecutionLog.objects.first().error_message, "")
 
+    @patch("job_scraper.api_scraper.requests.get")
+    def test_api_scraper_resets_private_run_id_after_scrape(self, get_mock):
+        response = Mock()
+        response.raise_for_status = Mock()
+        response.json.return_value = {"data": []}
+        response.text = '{"data": []}'
+        get_mock.return_value = response
+
+        scraper = ApiScraper(run_id="fixedrun")
+        scraper.scrape(self.website, "python", "us")
+
+        self.assertIsNone(scraper._run_id)
+
 
 @override_settings(DEBUG_ENRICHMENT=False)
 class ApolloClientTests(TestCase):
@@ -510,3 +523,28 @@ class StealthScraperRegressionTests(TestCase):
 
         self.assertGreater(len(jobs), 0)
         self.assertEqual(get_description_mock.call_count, 1)
+
+    @patch("job_scraper.stealth_scraper.jitter_sleep")
+    @patch("job_scraper.stealth_scraper.SB")
+    def test_stealth_scraper_resets_private_run_id_after_scrape(self, sb_mock, sleep_mock):
+        with open(
+            "/home/nathnael/dev/Python/automoto/media/artifacts/html_dumps/LinkedIn_error_20260423_111231.html",
+            "r",
+            encoding="utf-8",
+            errors="ignore",
+        ) as fh:
+            html = fh.read()
+
+        driver = Mock()
+        driver.get_screenshot_as_png.return_value = b"png"
+        driver.window_handles = ["main"]
+
+        sb = Mock()
+        sb.get_page_source.return_value = html
+        sb.driver = driver
+        sb_mock.return_value.__enter__.return_value = sb
+
+        scraper = StealthScraper(headless=True, run_id="fixedrun")
+        scraper.scrape(self.website, keywords="", location="us", max_pages=1)
+
+        self.assertIsNone(scraper._run_id)

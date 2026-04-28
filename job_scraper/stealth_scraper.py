@@ -1,7 +1,9 @@
 import logging
 import random
+import re
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 
 from django.core.files.base import ContentFile
@@ -29,403 +31,85 @@ USER_AGENTS = [
 
 
 class StealthScraper:
-    """
-    A generic stealth scraper using SeleniumBase UC mode.
-    """
+    """Generic stealth scraper powered by SeleniumBase UC mode."""
 
-    def __init__(self, headless=True):
+    def __init__(self, headless=True, run_id=None):
         self.headless = headless
+        self._run_id = run_id
+        self._driver = None
+        self._session_manager = self._build_session_manager()
 
     def scrape(
         self, website: CustomWebsite, keywords: str, location: str, max_pages: int = 1
     ):
-        """
-        Generic scrape method that uses a CustomWebsite object's selectors.
-        """
         keywords = (keywords or "").strip()
         location = (location or "").strip()
-        run_id = uuid.uuid4().hex[:8]
         started_at = time.monotonic()
 
+        self._ensure_run_id()
+        self._log_scrape_start(website, max_pages)
+
+        state = {
+            "all_new_jobs": [],
+            "error_msg": "",
+            "screenshot_bytes": None,
+            "html_content": "",
+            "detail_fetch_count": 0,
+            "detail_fetch_limit": 3,
+            "detail_fetch_disabled": False,
+            "detail_fetch_session_failures": 0,
+            "selector_metrics": "",
+            "card_parse_failures": 0,
+        }
+
+        try:
+            with self._driver_session() as driver:
+                self._scrape_pages(driver, website, keywords, location, max_pages, state)
+        except Exception as exc:
+            state["error_msg"] = f"Driver Initialization/Execution Failed: {exc}"
+            logger.exception(
+                "stealth_driver_failed run_id=%s website_id=%s website=%s",
+                self._run_id,
+                website.id,
+                website.name,
+            )
+
+        saved_jobs = self._save_jobs(state["all_new_jobs"])
+        state["error_msg"] = self._finalize_error_message(
+            state["error_msg"],
+            len(state["all_new_jobs"]),
+            state["card_parse_failures"],
+        )
+        self._log_execution(website, state)
+        self._log_scrape_done(website, started_at, saved_jobs, state)
+        self._reset_run_state()
+        return saved_jobs
+
+    def _ensure_run_id(self):
+        if not self._run_id:
+            self._run_id = uuid.uuid4().hex[:8]
+
+    def _log_scrape_start(self, website: CustomWebsite, max_pages: int):
         logger.info(
             "stealth_scrape_start run_id=%s website_id=%s website=%s max_pages=%s",
-            run_id,
+            self._run_id,
             website.id,
             website.name,
             max_pages,
         )
 
-        all_new_jobs = []
-        error_msg = ""
-        screenshot_bytes = None
-        html_content = ""
-        detail_fetch_count = 0
-        detail_fetch_limit = 3
-        detail_fetch_disabled = False
-        detail_fetch_session_failures = 0
-        selector_metrics = ""
-        card_parse_failures = 0
+    @contextmanager
+    def _driver_session(self):
+        manager = self._session_manager or self._build_session_manager()
+        with manager as driver:
+            self._driver = driver
+            try:
+                yield driver
+            finally:
+                self._driver = None
+                self._session_manager = self._build_session_manager()
 
-        try:
-            with self._session() as driver:
-                for page_num in range(1, max_pages + 1):
-                    url = website.search_url.format(
-                        keywords=keywords, location=location, page=page_num
-                    )
-                    try:
-                        jitter_sleep(1.5, 3.2)
-                        logger.info(
-                            "stealth_page_start run_id=%s website_id=%s page=%s url=%s",
-                            run_id,
-                            website.id,
-                            page_num,
-                            url,
-                        )
-
-                        self._open_url(driver, url)
-
-                        jitter_sleep(3.0, 5.5)
-                        # self._simulate_browse(driver)
-
-                        try:
-                            self._solve_captcha(driver)
-                            logger.info(
-                                "captcha_solver_attempted run_id=%s website_id=%s page=%s",
-                                run_id,
-                                website.id,
-                                page_num,
-                            )
-                        except Exception as captcha_err:
-                            logger.warning(
-                                "captcha_solver_failed run_id=%s website_id=%s error=%s",
-                                run_id,
-                                website.id,
-                                str(captcha_err),
-                            )
-
-                        try:
-                            # Wait for the primary selector to ensure page loaded
-                            self._wait_for_selector(
-                                driver, website.job_list_selector, 20
-                            )
-                        except Exception:
-                            logger.warning(
-                                "selector_timeout run_id=%s website_id=%s website=%s selector=%s",
-                                run_id,
-                                website.id,
-                                website.name,
-                                website.job_list_selector,
-                            )
-                            error_msg = "Timeout waiting for primary selector. Possible CAPTCHA wall."
-                            try:
-                                html_content = self._get_page_source(driver)
-                                screenshot_bytes = self._get_screenshot_png(driver)
-                            except Exception:
-                                logger.debug(
-                                    "artifact_capture_failed run_id=%s website_id=%s",
-                                    run_id,
-                                    website.id,
-                                    exc_info=True,
-                                )
-                            break
-
-                        html_content = self._get_page_source(driver)
-                        soup = BeautifulSoup(html_content, "html.parser")
-                        job_elements = soup.select(website.job_list_selector)
-                        coverage = compute_selector_coverage(
-                            job_elements,
-                            {
-                                "title": website.title_selector,
-                                "company": website.company_selector,
-                                "location": website.location_selector,
-                                "job_link": website.job_link_selector,
-                                "salary": website.salary_selector,
-                                "date": website.date_selector,
-                            },
-                        )
-                        selector_metrics = summarize_selector_coverage(coverage)
-                        anti_bot_result = classify_anti_bot_response(
-                            html_content=html_content,
-                            card_count=len(job_elements),
-                        )
-                        if anti_bot_result["blocked"]:
-                            outcome = record_block_event(website.id)
-                            logger.error(
-                                "anti_bot_detected run_id=%s website_id=%s website=%s reason=%s failures=%s",
-                                run_id,
-                                website.id,
-                                website.name,
-                                anti_bot_result["reason"],
-                                outcome["failures"],
-                            )
-                            error_msg = (
-                                "Anti-bot challenge detected. "
-                                f"{anti_bot_result['reason']} failures={outcome['failures']}"
-                            )
-                            try:
-                                screenshot_bytes = self._get_screenshot_png(driver)
-                            except Exception:
-                                logger.debug(
-                                    "artifact_capture_failed run_id=%s website_id=%s",
-                                    run_id,
-                                    website.id,
-                                    exc_info=True,
-                                )
-                            break
-
-                        clear_block_state(website.id)
-                        logger.info(
-                            "stealth_page_cards_found run_id=%s website_id=%s page=%s cards=%s selector_metrics=%s",
-                            run_id,
-                            website.id,
-                            page_num,
-                            len(job_elements),
-                            selector_metrics,
-                        )
-
-                        for element in job_elements:
-                            try:
-                                title = ""
-                                if website.title_selector:
-                                    title_elem = element.select_one(
-                                        website.title_selector
-                                    )
-                                    title = (
-                                        title_elem.get("title")
-                                        or title_elem.get_text(strip=True)
-                                        if title_elem
-                                        else ""
-                                    )
-
-                                company = ""
-                                if website.company_selector:
-                                    company_elem = element.select_one(
-                                        website.company_selector
-                                    )
-                                    company = (
-                                        company_elem.get_text(strip=True)
-                                        if company_elem
-                                        else ""
-                                    )
-
-                                loc_text = ""
-                                if website.location_selector:
-                                    location_elem = element.select_one(
-                                        website.location_selector
-                                    )
-                                    loc_text = (
-                                        location_elem.get_text(strip=True)
-                                        if location_elem
-                                        else ""
-                                    )
-
-                                job_url = ""
-                                if website.job_link_selector:
-                                    link_elem = element.select_one(
-                                        website.job_link_selector
-                                    )
-                                    if link_elem and link_elem.get("href"):
-                                        from urllib.parse import urljoin
-
-                                        job_url = urljoin(
-                                            website.base_url, link_elem.get("href")
-                                        )
-
-                                if not job_url or not title:
-                                    continue
-
-                                salary = ""
-                                if website.salary_selector:
-                                    salary_elem = element.select_one(
-                                        website.salary_selector
-                                    )
-                                    salary = (
-                                        salary_elem.get_text(strip=True)
-                                        if salary_elem
-                                        else ""
-                                    )
-
-                                description = ""
-                                requirements = ""
-
-                                if (
-                                    job_url
-                                    and website.description_selector
-                                    and detail_fetch_count < detail_fetch_limit
-                                    and not detail_fetch_disabled
-                                ):
-                                    if (
-                                        not Job.objects.filter(source_url=job_url)
-                                        .exclude(description="")
-                                        .exists()
-                                    ):
-                                        logger.info(
-                                            f"Fetching description for {job_url}"
-                                        )
-                                        jitter_sleep(0.8, 1.8)
-                                        try:
-                                            description = (
-                                                self._get_description_selenium(
-                                                    driver,
-                                                    job_url,
-                                                    website.description_selector,
-                                                )
-                                            )
-                                            detail_fetch_count += 1
-                                        except Exception as exc:
-                                            if not self._is_invalid_session_error(exc):
-                                                raise
-                                            detail_fetch_disabled = True
-                                            detail_fetch_session_failures += 1
-                                            logger.warning(
-                                                "description_fetch_disabled_invalid_session run_id=%s website_id=%s website=%s job_url=%s",
-                                                run_id,
-                                                website.id,
-                                                website.name,
-                                                job_url,
-                                            )
-
-                                job_data = {
-                                    "title": title.strip(),
-                                    "company": company.strip(),
-                                    "location": loc_text.strip(),
-                                    "job_url": job_url,
-                                    "salary": salary,
-                                    "description": description,
-                                }
-
-                                job_data = self._enrich_job_data(
-                                    job_data, description, keywords
-                                )
-
-                                all_new_jobs.append(
-                                    {
-                                        "source_url": job_url,
-                                        "defaults": {
-                                            "title": job_data.get("title", ""),
-                                            "company": job_data.get("company", ""),
-                                            "location": job_data.get("location", ""),
-                                            "city": job_data.get("city", ""),
-                                            "country": job_data.get("country", ""),
-                                            "continent": job_data.get("continent", ""),
-                                            "salary": job_data.get("salary", ""),
-                                            "job_type": job_data.get("job_type", ""),
-                                            "experience_level": job_data.get(
-                                                "experience_level", ""
-                                            ),
-                                            "industry": job_data.get("industry", ""),
-                                            "description": job_data.get(
-                                                "description", ""
-                                            ),
-                                            "requirements": job_data.get(
-                                                "requirements", ""
-                                            ),
-                                            "source_website": website.name,
-                                            "is_rfp": "contract" in keywords.lower()
-                                            or "rfp" in keywords.lower(),
-                                        },
-                                    }
-                                )
-
-                            except Exception:
-                                card_parse_failures += 1
-                                logger.exception(
-                                    "stealth_card_parse_failed run_id=%s website_id=%s website=%s",
-                                    run_id,
-                                    website.id,
-                                    website.name,
-                                )
-
-                    except Exception:
-                        logger.exception(
-                            "stealth_page_failed run_id=%s website_id=%s website=%s page=%s",
-                            run_id,
-                            website.id,
-                            website.name,
-                            page_num,
-                        )
-                        break
-        except Exception as e:
-            logger.exception(
-                "stealth_driver_failed run_id=%s website_id=%s website=%s",
-                run_id,
-                website.id,
-                website.name,
-            )
-            error_msg = f"Driver Initialization/Execution Failed: {e}"
-
-        # Save jobs outside event loop to avoid SynchronousOnlyOperation
-        saved_jobs = []
-        for job_data in all_new_jobs:
-            job, created = Job.objects.update_or_create(
-                source_url=job_data["source_url"],
-                defaults=job_data["defaults"],
-            )
-            if created:
-                saved_jobs.append(job)
-
-        # Check for silent failures
-        if len(all_new_jobs) == 0 and not error_msg:
-            if card_parse_failures:
-                error_msg = f"Parsed cards but failed to extract/save {card_parse_failures} cards."
-            else:
-                error_msg = "No jobs found. CSS selectors may be outdated or the site is blocking silently."
-
-        log = ScraperExecutionLog.objects.create(
-            website=website,
-            scraper_type="seleniumbase",
-            jobs_found=len(all_new_jobs),
-            error_message=error_msg,
-        )
-
-        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if screenshot_bytes:
-            log.screenshot.save(
-                f"{website.name}_error_{timestamp_str}.png",
-                ContentFile(screenshot_bytes),
-                save=True,
-            )
-        if html_content:
-            log.html_dump.save(
-                f"{website.name}_error_{timestamp_str}.html",
-                ContentFile(html_content.encode("utf-8")),
-                save=True,
-            )
-
-        logger.info(
-            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s detail_fetch_disabled=%s detail_fetch_session_failures=%s card_parse_failures=%s",
-            run_id,
-            website.id,
-            website.name,
-            len(all_new_jobs),
-            len(saved_jobs),
-            int((time.monotonic() - started_at) * 1000),
-            bool(error_msg),
-            selector_metrics or "n/a",
-            detail_fetch_count,
-            detail_fetch_disabled,
-            detail_fetch_session_failures,
-            card_parse_failures,
-        )
-
-        return saved_jobs
-
-    def _simulate_browse(self, driver):
-        """Introduce small browse-like pauses and scrolling before extraction."""
-        try:
-            driver.execute_script(
-                "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.2));"
-            )
-            jitter_sleep(0.4, 1.0)
-            driver.execute_script(
-                "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.45));"
-            )
-            jitter_sleep(0.5, 1.1)
-            driver.execute_script("window.scrollTo(0, 0);")
-        except Exception:
-            logger.debug("stealth_browse_simulation_failed", exc_info=True)
-
-    def _session(self):
+    def _build_session_manager(self):
         width = random.randint(1200, 1920)
         height = random.randint(800, 1080)
         return SB(
@@ -440,19 +124,345 @@ class StealthScraper:
             test=True,
         )
 
+    def _scrape_pages(self, driver, website, keywords, location, max_pages, state):
+        for page_num in range(1, max_pages + 1):
+            should_continue = self._scrape_page(
+                driver, website, keywords, location, page_num, state
+            )
+            if not should_continue:
+                break
+
+    def _scrape_page(self, driver, website, keywords, location, page_num, state):
+        url = website.search_url.format(
+            keywords=keywords, location=location, page=page_num
+        )
+        logger.info(
+            "stealth_page_start run_id=%s website_id=%s page=%s url=%s",
+            self._run_id,
+            website.id,
+            page_num,
+            url,
+        )
+
+        try:
+            jitter_sleep(1.5, 3.2)
+            self._open_url(driver, url)
+            jitter_sleep(3.0, 5.5)
+
+            self._attempt_captcha_solver(driver, website, page_num)
+            if not self._wait_for_primary_selector(driver, website, state):
+                return False
+
+            html_content = self._get_page_source(driver)
+            state["html_content"] = html_content
+            soup = BeautifulSoup(html_content, "html.parser")
+            job_elements = soup.select(website.job_list_selector)
+
+            state["selector_metrics"] = self._selector_metrics(website, job_elements)
+            if self._handle_anti_bot(website, job_elements, html_content, state):
+                return False
+
+            logger.info(
+                "stealth_page_cards_found run_id=%s website_id=%s page=%s cards=%s selector_metrics=%s",
+                self._run_id,
+                website.id,
+                page_num,
+                len(job_elements),
+                state["selector_metrics"],
+            )
+            self._collect_jobs_from_page(driver, website, keywords, job_elements, state)
+            return True
+        except Exception:
+            logger.exception(
+                "stealth_page_failed run_id=%s website_id=%s website=%s page=%s",
+                self._run_id,
+                website.id,
+                website.name,
+                page_num,
+            )
+            return False
+
+    def _attempt_captcha_solver(self, driver, website, page_num):
+        try:
+            self._solve_captcha(driver)
+            logger.info(
+                "captcha_solver_attempted run_id=%s website_id=%s page=%s",
+                self._run_id,
+                website.id,
+                page_num,
+            )
+        except Exception as exc:
+            logger.warning(
+                "captcha_solver_failed run_id=%s website_id=%s error=%s",
+                self._run_id,
+                website.id,
+                str(exc),
+            )
+
+    def _wait_for_primary_selector(self, driver, website, state):
+        try:
+            self._wait_for_selector(driver, website.job_list_selector, 20)
+            return True
+        except Exception:
+            logger.warning(
+                "selector_timeout run_id=%s website_id=%s website=%s selector=%s",
+                self._run_id,
+                website.id,
+                website.name,
+                website.job_list_selector,
+            )
+            state["error_msg"] = (
+                "Timeout waiting for primary selector. Possible CAPTCHA wall."
+            )
+            self._capture_artifacts(driver, website, state)
+            return False
+
+    def _handle_anti_bot(self, website, job_elements, html_content, state):
+        anti_bot_result = classify_anti_bot_response(
+            html_content=html_content,
+            card_count=len(job_elements),
+        )
+        if not anti_bot_result["blocked"]:
+            clear_block_state(website.id)
+            return False
+
+        outcome = record_block_event(website.id)
+        logger.error(
+            "anti_bot_detected run_id=%s website_id=%s website=%s reason=%s failures=%s",
+            self._run_id,
+            website.id,
+            website.name,
+            anti_bot_result["reason"],
+            outcome["failures"],
+        )
+        state["error_msg"] = (
+            "Anti-bot challenge detected. "
+            f"{anti_bot_result['reason']} failures={outcome['failures']}"
+        )
+        self._capture_artifacts(self._driver, website, state)
+        return True
+
+    def _capture_artifacts(self, driver, website, state):
+        try:
+            state["html_content"] = self._get_page_source(driver)
+            state["screenshot_bytes"] = self._get_screenshot_png(driver)
+        except Exception:
+            logger.debug(
+                "artifact_capture_failed run_id=%s website_id=%s",
+                self._run_id,
+                website.id,
+                exc_info=True,
+            )
+
+    def _selector_metrics(self, website, job_elements):
+        coverage = compute_selector_coverage(
+            job_elements,
+            {
+                "title": website.title_selector,
+                "company": website.company_selector,
+                "location": website.location_selector,
+                "job_link": website.job_link_selector,
+                "salary": website.salary_selector,
+                "date": website.date_selector,
+            },
+        )
+        return summarize_selector_coverage(coverage)
+
+    def _collect_jobs_from_page(self, driver, website, keywords, job_elements, state):
+        for element in job_elements:
+            job_entry = self._parse_job_element(driver, website, keywords, element, state)
+            if job_entry is not None:
+                state["all_new_jobs"].append(job_entry)
+
+    def _parse_job_element(self, driver, website, keywords, element, state):
+        try:
+            title = self._select_text(element, website.title_selector, prefer_title=True)
+            company = self._select_text(element, website.company_selector)
+            loc_text = self._select_text(element, website.location_selector)
+            job_url = self._select_url(element, website)
+            salary = self._select_text(element, website.salary_selector)
+
+            if not job_url or not title:
+                return None
+
+            description = self._maybe_fetch_description(
+                driver, website, keywords, job_url, state
+            )
+            job_data = {
+                "title": title.strip(),
+                "company": company.strip(),
+                "location": loc_text.strip(),
+                "job_url": job_url,
+                "salary": salary,
+                "description": description,
+            }
+            job_data = self._enrich_job_data(job_data, description, keywords)
+            return {
+                "source_url": job_url,
+                "defaults": {
+                    "title": job_data.get("title", ""),
+                    "company": job_data.get("company", ""),
+                    "location": job_data.get("location", ""),
+                    "city": job_data.get("city", ""),
+                    "country": job_data.get("country", ""),
+                    "continent": job_data.get("continent", ""),
+                    "salary": job_data.get("salary", ""),
+                    "job_type": job_data.get("job_type", ""),
+                    "experience_level": job_data.get("experience_level", ""),
+                    "industry": job_data.get("industry", ""),
+                    "description": job_data.get("description", ""),
+                    "requirements": job_data.get("requirements", ""),
+                    "source_website": website.name,
+                    "is_rfp": "contract" in keywords.lower()
+                    or "rfp" in keywords.lower(),
+                },
+            }
+        except Exception:
+            state["card_parse_failures"] += 1
+            logger.exception(
+                "stealth_card_parse_failed run_id=%s website_id=%s website=%s",
+                self._run_id,
+                website.id,
+                website.name,
+            )
+            return None
+
+    def _maybe_fetch_description(self, driver, website, keywords, job_url, state):
+        if not website.description_selector:
+            return ""
+        if state["detail_fetch_count"] >= state["detail_fetch_limit"]:
+            return ""
+        if state["detail_fetch_disabled"]:
+            return ""
+        if Job.objects.filter(source_url=job_url).exclude(description="").exists():
+            return ""
+
+        logger.info("Fetching description for %s", job_url)
+        jitter_sleep(0.8, 1.8)
+        try:
+            description = self._get_description_selenium(
+                driver, job_url, website.description_selector
+            )
+            state["detail_fetch_count"] += 1
+            return description
+        except Exception as exc:
+            if not self._is_invalid_session_error(exc):
+                raise
+            state["detail_fetch_disabled"] = True
+            state["detail_fetch_session_failures"] += 1
+            logger.warning(
+                "description_fetch_disabled_invalid_session run_id=%s website_id=%s website=%s job_url=%s",
+                self._run_id,
+                website.id,
+                website.name,
+                job_url,
+            )
+            return ""
+
+    def _save_jobs(self, job_entries):
+        saved_jobs = []
+        for job_entry in job_entries:
+            job, created = Job.objects.update_or_create(
+                source_url=job_entry["source_url"],
+                defaults=job_entry["defaults"],
+            )
+            if created:
+                saved_jobs.append(job)
+        return saved_jobs
+
+    def _finalize_error_message(self, error_msg, jobs_seen, card_parse_failures):
+        if error_msg:
+            return error_msg
+        if jobs_seen == 0 and card_parse_failures:
+            return f"Parsed cards but failed to extract/save {card_parse_failures} cards."
+        if jobs_seen == 0:
+            return "No jobs found. CSS selectors may be outdated or the site is blocking silently."
+        return ""
+
+    def _log_execution(self, website: CustomWebsite, state):
+        log = ScraperExecutionLog.objects.create(
+            website=website,
+            scraper_type="seleniumbase",
+            jobs_found=len(state["all_new_jobs"]),
+            error_message=state["error_msg"],
+        )
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if state["screenshot_bytes"]:
+            log.screenshot.save(
+                f"{website.name}_error_{timestamp_str}.png",
+                ContentFile(state["screenshot_bytes"]),
+                save=True,
+            )
+        if state["html_content"]:
+            log.html_dump.save(
+                f"{website.name}_error_{timestamp_str}.html",
+                ContentFile(state["html_content"].encode("utf-8")),
+                save=True,
+            )
+
+    def _log_scrape_done(self, website, started_at, saved_jobs, state):
+        logger.info(
+            "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s detail_fetch_disabled=%s detail_fetch_session_failures=%s card_parse_failures=%s",
+            self._run_id,
+            website.id,
+            website.name,
+            len(state["all_new_jobs"]),
+            len(saved_jobs),
+            int((time.monotonic() - started_at) * 1000),
+            bool(state["error_msg"]),
+            state["selector_metrics"] or "n/a",
+            state["detail_fetch_count"],
+            state["detail_fetch_disabled"],
+            state["detail_fetch_session_failures"],
+            state["card_parse_failures"],
+        )
+
+    def _reset_run_state(self):
+        self._run_id = None
+        self._driver = None
+        self._session_manager = self._build_session_manager()
+
+    def _select_text(self, element, selector, prefer_title=False):
+        if not selector:
+            return ""
+        selected = element.select_one(selector)
+        if not selected:
+            return ""
+        if prefer_title:
+            return selected.get("title") or selected.get_text(strip=True)
+        return selected.get_text(strip=True)
+
+    def _select_url(self, element, website):
+        if not website.job_link_selector:
+            return ""
+        link_elem = element.select_one(website.job_link_selector)
+        if not link_elem or not link_elem.get("href"):
+            return ""
+        from urllib.parse import urljoin
+
+        return urljoin(website.base_url, link_elem.get("href"))
+
+    def _simulate_browse(self, driver):
+        try:
+            driver.execute_script(
+                "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.2));"
+            )
+            jitter_sleep(0.4, 1.0)
+            driver.execute_script(
+                "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.45));"
+            )
+            jitter_sleep(0.5, 1.1)
+            driver.execute_script("window.scrollTo(0, 0);")
+        except Exception:
+            logger.debug("stealth_browse_simulation_failed", exc_info=True)
+
     def _open_url(self, driver, url):
-        # Using uc_open_with_reconnect which is the recommended way to bypass Cloudflare Turnstile
-        driver.uc_open_with_reconnect(url, reconnect_time=5)
-        # driver.sleep(2)
-        # driver.solve_captcha_if_detected()
-        # driver.open(url)
+        driver.open(url)
 
     def _solve_captcha(self, driver):
         try:
-            # Try SeleniumBase's undetected GUI clicker for Cloudflare
             driver.uc_gui_click_captcha()
         except Exception:
-            # Fallback to standard solve_captcha
             driver.solve_captcha()
 
     def _wait_for_selector(self, driver, selector, timeout):
@@ -474,16 +484,12 @@ class StealthScraper:
         driver.switch_to_default_window()
 
     def _get_description_selenium(self, driver, job_url, selector):
-        """Fetch job description from a detail URL using SeleniumBase driver."""
         try:
-            # We open in a new tab to avoid losing search state
             self._open_new_tab(driver)
             self._switch_to_newest_window(driver)
             self._open_url(driver, job_url)
-
             jitter_sleep(2.0, 4.0)
 
-            # Wait for selector
             try:
                 self._wait_for_selector(driver, selector, 10)
             except Exception:
@@ -499,7 +505,6 @@ class StealthScraper:
 
             text = ""
             if desc_elem:
-                # Try to keep some formatting
                 for br in desc_elem.find_all("br"):
                     br.replace_with("\n")
                 for p in desc_elem.find_all("p"):
@@ -531,15 +536,10 @@ class StealthScraper:
         )
 
     def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
-        """Apply heuristic parsing to fill in missing fields."""
         geo = parse_location_components(job_data.get("location", ""))
-        city = geo["city"]
-        country = geo["country"]
-        continent = geo["continent"]
-
-        job_data["city"] = city
-        job_data["country"] = country
-        job_data["continent"] = continent
+        job_data["city"] = geo["city"]
+        job_data["country"] = geo["country"]
+        job_data["continent"] = geo["continent"]
 
         if not job_data.get("requirements") and description:
             job_data["requirements"] = self._extract_requirements(description)
@@ -549,12 +549,9 @@ class StealthScraper:
         job_data["job_type"] = self._extract_job_type(description)
         job_data["experience_level"] = self._extract_experience_level(description)
         job_data["industry"] = self._extract_industry(description)
-
         return job_data
 
     def _extract_salary_fallback(self, description: str) -> str:
-        import re
-
         salary_pattern = re.compile(
             r"(\$[\d,]+(?:\.\d{2})?(?:\s*(?:-|to)\s*\$[\d,]+(?:\.\d{2})?)?(?:\s*(?:a|per|/)\s*(?:year|yr|month|mo|hour|hr|week|wk|annually|k))?)",
             re.IGNORECASE,
@@ -572,8 +569,6 @@ class StealthScraper:
         return ""
 
     def _extract_requirements(self, description: str) -> str:
-        import re
-
         requirements_keywords = [
             "requirements",
             "qualifications",
