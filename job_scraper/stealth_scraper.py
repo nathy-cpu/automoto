@@ -63,10 +63,9 @@ class StealthScraper:
         }
 
         try:
-            with self._driver_session() as driver:
-                self._scrape_pages(
-                    driver, website, keywords, location, max_pages, state
-                )
+            with self._driver_session():
+                self._warm_up_session()
+                self._scrape_pages(website, keywords, location, max_pages, state)
         except Exception as exc:
             state["error_msg"] = f"Driver Initialization/Execution Failed: {exc}"
             logger.exception(
@@ -126,15 +125,100 @@ class StealthScraper:
             test=True,
         )
 
-    def _scrape_pages(self, driver, website, keywords, location, max_pages, state):
+    def _scrape_pages(self, website, keywords, location, max_pages, state):
+        # Visit the domain first to satisfy Selenium's cookie domain rules
+        # self._open_url(website.base_url)
+        # jitter_sleep(1.5, 3.0)
+        
+        # # load cookies if available
+        # self._load_cookies(f"{website.name}_cookies.json")
+        # self._driver.refresh()
+        # jitter_sleep(1.0, 3.5)
+
         for page_num in range(1, max_pages + 1):
             should_continue = self._scrape_page(
-                driver, website, keywords, location, page_num, state
+                website, keywords, location, page_num, state
             )
             if not should_continue:
                 break
 
-    def _scrape_page(self, driver, website, keywords, location, page_num, state):
+    def _warm_up_session(self):
+        """Build trust by visiting neutral sites before the target."""
+        warm_up_sites = [
+            "https://www.google.com/search?q=latest+technology+news",
+            "https://en.wikipedia.org/wiki/Main_Page",
+        ]
+        logger.info(
+            "starting_browser_warming_phase run_id=%s sites=%d",
+            self._run_id,
+            len(warm_up_sites),
+        )
+
+        for site in warm_up_sites:
+            try:
+                self._driver.uc_open_with_reconnect(site, reconnect_time=5)
+                jitter_sleep(2, 4)
+                # Simulate a little bit of interest
+                self._driver.execute_script(
+                    f"window.scrollTo(0, {random.randint(300, 700)});"
+                )
+                jitter_sleep(1, 2)
+            except Exception as e:
+                logger.debug(
+                    "warming_site_failed run_id=%s site=%s error=%s",
+                    self._run_id,
+                    site,
+                    str(e),
+                )
+
+        logger.info("browser_warming_complete run_id=%s", self._run_id)
+
+    def _load_cookies(self, cookie_file_path):
+        """Load cookies from a JSON file."""
+        import json
+        import os
+
+        if not os.path.exists(cookie_file_path):
+            logger.warning(
+                "cookie_file_not_found run_id=%s path=%s",
+                self._run_id,
+                cookie_file_path,
+            )
+            return False
+
+        try:
+            with open(cookie_file_path, "r") as f:
+                cookies = json.load(f)
+
+            # Using native Selenium to bypass SeleniumBase's folder/naming rules
+            for cookie in cookies:
+                # Clean up cookie dict for Selenium compatibility
+                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
+                    del cookie['sameSite']
+                if 'expirationDate' in cookie:
+                    cookie['expiry'] = int(cookie['expirationDate'])
+                    del cookie['expirationDate']
+                if 'hostOnly' in cookie:
+                    del cookie['hostOnly']
+                if 'session' in cookie:
+                    del cookie['session']
+                if 'storeId' in cookie:
+                    del cookie['storeId']
+                    
+                try:
+                    self._driver.driver.add_cookie(cookie)
+                except Exception as e:
+                    logger.debug("cookie_add_failed run_id=%s name=%s error=%s", self._run_id, cookie.get('name'), str(e))
+                    
+            logger.info("cookies_loaded_successfully run_id=%s path=%s count=%d", self._run_id, cookie_file_path, len(cookies))
+            return True
+        except Exception as e:
+            logger.error(
+                "failed_to_load_cookies run_id=%s error=%s", self._run_id, str(e)
+            )
+            return False
+
+    def _scrape_page(self, website, keywords, location, page_num, state):
         url = website.search_url.format(
             keywords=keywords, location=location, page=page_num
         )
@@ -148,15 +232,15 @@ class StealthScraper:
 
         try:
             jitter_sleep(1.5, 3.2)
-            self._open_url(driver, url)
+            self._open_url(url)
             jitter_sleep(3.0, 5.5)
 
-            if not self._attempt_captcha_solver(driver, website, page_num, state):
+            if not self._attempt_captcha_solver(website, page_num, state):
                 return False
-            if not self._wait_for_primary_selector(driver, website, state):
+            if not self._wait_for_primary_selector(website, state):
                 return False
 
-            html_content = self._get_page_source(driver)
+            html_content = self._get_page_source()
             state["html_content"] = html_content
             soup = BeautifulSoup(html_content, "html.parser")
             job_elements = soup.select(website.job_list_selector)
@@ -173,7 +257,7 @@ class StealthScraper:
                 len(job_elements),
                 state["selector_metrics"],
             )
-            self._collect_jobs_from_page(driver, website, keywords, job_elements, state)
+            self._collect_jobs_from_page(website, keywords, job_elements, state)
             return True
         except Exception:
             logger.exception(
@@ -185,15 +269,15 @@ class StealthScraper:
             )
             return False
 
-    def _attempt_captcha_solver(self, driver, website, page_num, state):
-        anti_bot_result = self._challenge_state(driver)
+    def _attempt_captcha_solver(self, website, page_num, state):
+        anti_bot_result = self._challenge_state()
         if not anti_bot_result["blocked"]:
             return True
 
         try:
-            self._solve_captcha(driver)
+            self._solve_captcha()
             jitter_sleep(2.0, 4.0)
-            anti_bot_result = self._challenge_state(driver)
+            anti_bot_result = self._challenge_state()
             logger.info(
                 "captcha_solver_attempted run_id=%s website_id=%s page=%s blocked_after_attempt=%s reason=%s",
                 self._run_id,
@@ -203,7 +287,7 @@ class StealthScraper:
                 anti_bot_result["reason"],
             )
             if anti_bot_result["blocked"]:
-                self._record_challenge_failure(driver, website, state, anti_bot_result)
+                self._record_challenge_failure(website, state, anti_bot_result)
                 return False
             return True
         except Exception as exc:
@@ -213,13 +297,13 @@ class StealthScraper:
                 website.id,
                 str(exc),
             )
-            self._capture_artifacts(driver, website, state)
+            self._capture_artifacts(website, state)
             state["error_msg"] = f"Captcha solver failed: {exc}"
             return False
 
-    def _wait_for_primary_selector(self, driver, website, state):
+    def _wait_for_primary_selector(self, website, state):
         try:
-            self._wait_for_selector(driver, website.job_list_selector, 20)
+            self._wait_for_selector(website.job_list_selector, 20)
             return True
         except Exception:
             logger.warning(
@@ -232,7 +316,7 @@ class StealthScraper:
             state["error_msg"] = (
                 "Timeout waiting for primary selector. Possible CAPTCHA wall."
             )
-            self._capture_artifacts(driver, website, state)
+            self._capture_artifacts(website, state)
             return False
 
     def _handle_anti_bot(self, website, job_elements, html_content, state):
@@ -257,10 +341,10 @@ class StealthScraper:
             "Anti-bot challenge detected. "
             f"{anti_bot_result['reason']} failures={outcome['failures']}"
         )
-        self._capture_artifacts(self._driver, website, state)
+        self._capture_artifacts(website, state)
         return True
 
-    def _record_challenge_failure(self, driver, website, state, anti_bot_result):
+    def _record_challenge_failure(self, website, state, anti_bot_result):
         outcome = record_block_event(website.id)
         logger.error(
             "captcha_challenge_persisted run_id=%s website_id=%s website=%s reason=%s failures=%s",
@@ -274,16 +358,16 @@ class StealthScraper:
             "Captcha challenge still present after solver attempt. "
             f"{anti_bot_result['reason']} failures={outcome['failures']}"
         )
-        self._capture_artifacts(driver, website, state)
+        self._capture_artifacts(website, state)
 
-    def _challenge_state(self, driver):
-        html_content = self._get_page_source(driver)
+    def _challenge_state(self):
+        html_content = self._get_page_source()
         return classify_anti_bot_response(html_content=html_content, card_count=0)
 
-    def _capture_artifacts(self, driver, website, state):
+    def _capture_artifacts(self, website, state):
         try:
-            state["html_content"] = self._get_page_source(driver)
-            state["screenshot_bytes"] = self._get_screenshot_png(driver)
+            state["html_content"] = self._get_page_source()
+            state["screenshot_bytes"] = self._get_screenshot_png()
         except Exception:
             logger.debug(
                 "artifact_capture_failed run_id=%s website_id=%s",
@@ -306,15 +390,13 @@ class StealthScraper:
         )
         return summarize_selector_coverage(coverage)
 
-    def _collect_jobs_from_page(self, driver, website, keywords, job_elements, state):
+    def _collect_jobs_from_page(self, website, keywords, job_elements, state):
         for element in job_elements:
-            job_entry = self._parse_job_element(
-                driver, website, keywords, element, state
-            )
+            job_entry = self._parse_job_element(website, keywords, element, state)
             if job_entry is not None:
                 state["all_new_jobs"].append(job_entry)
 
-    def _parse_job_element(self, driver, website, keywords, element, state):
+    def _parse_job_element(self, website, keywords, element, state):
         try:
             title = self._select_text(
                 element, website.title_selector, prefer_title=True
@@ -328,7 +410,7 @@ class StealthScraper:
                 return None
 
             description = self._maybe_fetch_description(
-                driver, website, keywords, job_url, state
+                website, keywords, job_url, state
             )
             job_data = {
                 "title": title.strip(),
@@ -369,7 +451,7 @@ class StealthScraper:
             )
             return None
 
-    def _maybe_fetch_description(self, driver, website, keywords, job_url, state):
+    def _maybe_fetch_description(self, website, keywords, job_url, state):
         if not website.description_selector:
             return ""
         if state["detail_fetch_count"] >= state["detail_fetch_limit"]:
@@ -383,7 +465,7 @@ class StealthScraper:
         jitter_sleep(0.8, 1.8)
         try:
             description = self._get_description_selenium(
-                driver, job_url, website.description_selector
+                job_url, website.description_selector
             )
             state["detail_fetch_count"] += 1
             return description
@@ -486,56 +568,58 @@ class StealthScraper:
 
         return urljoin(website.base_url, link_elem.get("href"))
 
-    def _simulate_browse(self, driver):
+    def _simulate_browse(self):
         try:
-            driver.execute_script(
+            self._driver.execute_script(
                 "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.2));"
             )
             jitter_sleep(0.4, 1.0)
-            driver.execute_script(
+            self._driver.execute_script(
                 "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.45));"
             )
             jitter_sleep(0.5, 1.1)
-            driver.execute_script("window.scrollTo(0, 0);")
+            self._driver.execute_script("window.scrollTo(0, 0);")
         except Exception:
             logger.debug("stealth_browse_simulation_failed", exc_info=True)
 
-    def _open_url(self, driver, url):
-        driver.activate_cdp_mode(url)
+    def _open_url(self, url):
+        self._driver.activate_cdp_mode(url)
 
-    def _solve_captcha(self, driver):
+    def _solve_captcha(self):
         try:
-            driver.uc_gui_click_captcha()
+            self._driver.uc_gui_click_captcha()
         except Exception:
-            driver.solve_captcha()
+            self._driver.solve_captcha()
 
-    def _wait_for_selector(self, driver, selector, timeout):
-        driver.wait_for_element_present(selector, by="css selector", timeout=timeout)
+    def _wait_for_selector(self, selector, timeout):
+        self._driver.wait_for_element_present(
+            selector, by="css selector", timeout=timeout
+        )
 
-    def _get_page_source(self, driver):
-        return driver.get_page_source()
+    def _get_page_source(self):
+        return self._driver.get_page_source()
 
-    def _get_screenshot_png(self, driver):
-        return driver.driver.get_screenshot_as_png()
+    def _get_screenshot_png(self):
+        return self._driver.driver.get_screenshot_as_png()
 
-    def _open_new_tab(self, driver):
-        driver.open_new_tab(switch_to=True)
+    def _open_new_tab(self):
+        self._driver.open_new_tab(switch_to=True)
 
-    def _switch_to_newest_window(self, driver):
-        driver.switch_to_newest_window()
+    def _switch_to_newest_window(self):
+        self._driver.switch_to_newest_window()
 
-    def _switch_to_default_window(self, driver):
-        driver.switch_to_default_window()
+    def _switch_to_default_window(self):
+        self._driver.switch_to_default_window()
 
-    def _get_description_selenium(self, driver, job_url, selector):
+    def _get_description_selenium(self, job_url, selector):
         try:
-            self._open_new_tab(driver)
-            self._switch_to_newest_window(driver)
-            self._open_url(driver, job_url)
+            self._open_new_tab()
+            self._switch_to_newest_window()
+            self._open_url(job_url)
             jitter_sleep(2.0, 4.0)
 
             try:
-                self._wait_for_selector(driver, selector, 10)
+                self._wait_for_selector(selector, 10)
             except Exception:
                 logger.debug(
                     "description_selector_wait_timeout selector=%s job_url=%s",
@@ -544,7 +628,7 @@ class StealthScraper:
                     exc_info=True,
                 )
 
-            soup = BeautifulSoup(self._get_page_source(driver), "html.parser")
+            soup = BeautifulSoup(self._get_page_source(), "html.parser")
             desc_elem = soup.select_one(selector)
 
             text = ""
@@ -555,15 +639,15 @@ class StealthScraper:
                     p.append("\n")
                 text = desc_elem.get_text()
 
-            driver.driver.close()
-            self._switch_to_default_window(driver)
+            self._driver.driver.close()
+            self._switch_to_default_window()
             return text.strip()
         except Exception as exc:
             logger.exception("description_fetch_failed job_url=%s", job_url)
             try:
-                if len(driver.driver.window_handles) > 1:
-                    driver.driver.close()
-                    self._switch_to_default_window(driver)
+                if len(self._driver.driver.window_handles) > 1:
+                    self._driver.driver.close()
+                    self._switch_to_default_window()
             except Exception:
                 logger.debug(
                     "description_tab_cleanup_failed job_url=%s",

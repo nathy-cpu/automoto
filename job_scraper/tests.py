@@ -467,7 +467,7 @@ class StealthScraperRegressionTests(TestCase):
         self, solve_captcha_mock, wait_for_selector_mock, sb_mock, sleep_mock
     ):
         blocked_html = (
-            '<html><body><button>Verify you are human</button>'
+            "<html><body><button>Verify you are human</button>"
             '<div class="captcha-delivery"></div></body></html>'
         )
 
