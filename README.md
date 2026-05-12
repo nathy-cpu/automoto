@@ -44,7 +44,63 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 venv/bin/python manage.py migrate
 ```
 
-### 5. Start the app
+If this repo was already using an older SQLite database from before the custom user model was added, reset the local DB first:
+
+```bash
+mv db.sqlite3 db.sqlite3.bak
+venv/bin/python manage.py migrate
+```
+
+### 5. Seed local demo data
+
+```bash
+venv/bin/python manage.py seed_demo_data
+```
+
+Default seeded login:
+
+- email: `admin@example.com`
+- password: `admin12345`
+
+## Admin User Workflow
+
+User accounts are admin-created only.
+
+### Create a new user
+
+1. Sign in to Django admin at `http://localhost:8000/admin/`.
+2. Open `Users`.
+3. Click `Add User`.
+4. Enter the user's email and an initial password.
+5. Leave `Staff status` off for normal app users.
+6. Leave `Superuser status` off unless the user should administer the system.
+7. Save the user.
+
+### What the new user does next
+
+1. Sign in at `http://localhost:8000/accounts/login/`.
+2. Use the `Change Password` link in the app header if they want to replace the admin-set password.
+
+### Deactivate a user
+
+1. Open the user in Django admin.
+2. Uncheck `Active`.
+3. Save.
+
+You can override that user:
+
+```bash
+venv/bin/python manage.py seed_demo_data --email you@example.com --password strongpass123
+```
+
+This command seeds:
+
+- a dev superuser for login/admin access
+- default source configurations
+- sample jobs for the dashboard
+- sample contacts for job detail pages
+
+### 6. Start the app
 
 ```bash
 ./run.sh

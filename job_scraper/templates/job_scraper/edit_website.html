@@ -15,6 +15,13 @@
             <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
             <a href="{% url 'manage_websites' %}" class="nav-link">Manage Sources</a>
         </nav>
+        <div class="actions">
+            <a href="{% url 'password_change' %}" class="nav-link">Change Password</a>
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="nav-link nav-button">Sign Out</button>
+            </form>
+        </div>
     </header>
 
     <div class="container">

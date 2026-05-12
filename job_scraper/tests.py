@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
@@ -40,6 +41,12 @@ def create_custom_website(**overrides):
     return CustomWebsite.objects.create(**data)
 
 
+def login_test_user(client, email="user@example.com", password="testpass123"):
+    user = get_user_model().objects.create_user(email=email, password=password)
+    client.force_login(user)
+    return user
+
+
 class ModelTests(TestCase):
     def test_job_model_sanity(self):
         job = Job.objects.create(
@@ -62,6 +69,7 @@ class ModelTests(TestCase):
 
 class DashboardViewTests(TestCase):
     def setUp(self):
+        login_test_user(self.client)
         self.indeed = create_custom_website(name="Indeed")
         self.linkedin = create_custom_website(name="LinkedIn")
 
@@ -166,6 +174,7 @@ class DashboardViewTests(TestCase):
 
 class TriggerScrapeViewTests(TestCase):
     def setUp(self):
+        login_test_user(self.client)
         self.website = create_custom_website(name="RemoteBoard")
 
     def test_trigger_scrape_requires_post(self):
@@ -194,6 +203,7 @@ class TriggerScrapeViewTests(TestCase):
 
 class WebsiteDeleteViewTests(TestCase):
     def setUp(self):
+        login_test_user(self.client)
         self.website = create_custom_website(name="DeleteMe")
 
     def test_delete_website_requires_post(self):
@@ -213,6 +223,7 @@ class WebsiteDeleteViewTests(TestCase):
 
 class JobDetailViewTests(TestCase):
     def test_job_detail_returns_saved_job(self):
+        login_test_user(self.client)
         job = Job.objects.create(
             title="Backend Engineer",
             company="Acme",

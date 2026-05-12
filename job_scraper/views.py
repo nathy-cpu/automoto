@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import connection
@@ -118,6 +119,7 @@ def normalize_job_continent(country: str, continent: str, location: str) -> str:
     return raw_continent
 
 
+@login_required
 def dashboard(request: HttpRequest):
     """
     Premium Dashboard view for sales teams to filter and manage leads.
@@ -268,6 +270,7 @@ def dashboard(request: HttpRequest):
     return render(request, "job_scraper/dashboard.html", context)
 
 
+@login_required
 @require_POST
 def trigger_scrape(request: HttpRequest):
     """
@@ -352,6 +355,7 @@ def trigger_scrape(request: HttpRequest):
     return redirect(redirect_url)
 
 
+@login_required
 def job_detail(request: HttpRequest, job_id: int):
     try:
         job = get_object_or_404(Job, pk=job_id)
@@ -414,6 +418,7 @@ def job_detail(request: HttpRequest, job_id: int):
         )
 
 
+@login_required
 def manage_websites(request: HttpRequest):
     """View to manage custom websites"""
     if request.method == "POST":
@@ -464,6 +469,7 @@ def manage_websites(request: HttpRequest):
     )
 
 
+@login_required
 @require_POST
 def delete_website(request: HttpRequest, website_id: int):
     """Delete a custom website"""
@@ -474,6 +480,7 @@ def delete_website(request: HttpRequest, website_id: int):
     return redirect("manage_websites")
 
 
+@login_required
 def edit_website(request: HttpRequest, website_id: int):
     """View to edit an existing custom website configuration"""
     website = get_object_or_404(CustomWebsite, id=website_id)
