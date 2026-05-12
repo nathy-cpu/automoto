@@ -21,7 +21,7 @@ from .utils import resolve_scrape_location
 
 logger = logging.getLogger(__name__)
 
-RESULTS_PER_PAGE = 10
+RESULTS_PER_PAGE = settings.RESULTS_PER_PAGE
 
 COUNTRY_ALIASES = {
     "us": "United States",
@@ -277,7 +277,7 @@ def trigger_scrape(request: HttpRequest):
     """
     Manually triggers the consolidated scraper.
     """
-    keywords = request.POST.get("q", "software contract")
+    keywords = request.POST.get("q", settings.DEFAULT_SCRAPE_KEYWORDS)
     country_filters = [
         item.strip()
         for item in request.POST.get("countries", "").split(",")
@@ -291,7 +291,7 @@ def trigger_scrape(request: HttpRequest):
     location = resolve_scrape_location(
         countries=",".join(country_filters),
         continents=",".join(continent_filters),
-        fallback_location="us",
+        fallback_location=settings.DEFAULT_SCRAPE_LOCATION,
     )
     source_id = request.POST.get("source_id")
 
@@ -310,7 +310,10 @@ def trigger_scrape(request: HttpRequest):
         keywords,
     )
     new_jobs = scraper.get_recent_jobs(
-        location, keywords, max_pages=1, website_id=website_id
+        location,
+        keywords,
+        max_pages=settings.DEFAULT_SCRAPE_MAX_PAGES,
+        website_id=website_id,
     )
     logger.info(
         "manual_scrape_done website_id=%s jobs_new=%s",

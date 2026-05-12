@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+from django.core import mail
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -21,7 +22,13 @@ from job_scraper.management.commands.run_scheduler import (
     register_scheduled_scrapes,
     run_scheduled_scrape,
 )
-from job_scraper.models import CustomWebsite, Job, ScheduledScrape, ScraperExecutionLog
+from job_scraper.models import (
+    CustomWebsite,
+    Job,
+    ScheduledScrape,
+    ScheduledScrapeRun,
+    ScraperExecutionLog,
+)
 from job_scraper.request_scraper import JobScraper
 from job_scraper.stealth_scraper import StealthScraper
 from job_scraper.utils import parse_location_components
@@ -98,9 +105,16 @@ class ScheduledScrapeSchedulerTests(TestCase):
     def setUp(self):
         self.website_one = create_custom_website(name="Source One")
         self.website_two = create_custom_website(name="Source Two")
+        self.subscriber_one = get_user_model().objects.create_user(
+            email="sub1@example.com", password="testpass123"
+        )
+        self.subscriber_two = get_user_model().objects.create_user(
+            email="sub2@example.com", password="testpass123"
+        )
 
     @patch("job_scraper.management.commands.run_scheduler.execute_scrape_run")
     def test_run_scheduled_scrape_executes_for_all_selected_sources(self, execute_mock):
+        execute_mock.return_value = ([], 0)
         schedule = ScheduledScrape.objects.create(
             name="Morning Run",
             keywords="python",
@@ -163,6 +177,84 @@ class ScheduledScrapeSchedulerTests(TestCase):
         _, kwargs = scheduler.add_job.call_args
         self.assertEqual(kwargs["args"], [active.id])
         self.assertEqual(kwargs["id"], f"scheduled_scrape_{active.id}")
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="automoto@example.com",
+        SITE_DOMAIN="app.example.com",
+    )
+    @patch("job_scraper.management.commands.run_scheduler.execute_scrape_run")
+    def test_run_scheduled_scrape_emails_summary_to_subscribers(
+        self, execute_mock
+    ):
+        schedule = ScheduledScrape.objects.create(
+            name="Email Run",
+            keywords="python",
+            countries="us",
+            location="us",
+            cron_expression="*/30 * * * *",
+            timezone="UTC",
+            max_pages=1,
+            enrichment_limit=10,
+        )
+        schedule.websites.set([self.website_one])
+        schedule.subscribers.set([self.subscriber_one, self.subscriber_two])
+
+        jobs = []
+        for index in range(12):
+            jobs.append(
+                Job.objects.create(
+                    title=f"Role {index}",
+                    company="Acme",
+                    location="Remote",
+                    description="desc",
+                    source_website="Source One",
+                    source_url=f"https://example.com/jobs/{index}",
+                )
+            )
+        execute_mock.return_value = (jobs, 4)
+
+        run_scheduled_scrape(schedule.id)
+
+        run = ScheduledScrapeRun.objects.get(schedule=schedule)
+        self.assertEqual(run.jobs_new, 12)
+        self.assertEqual(run.contacts_found, 4)
+        self.assertEqual(run.emails_sent, 2)
+        self.assertEqual(run.email_error, "")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(set(mail.outbox[0].to), {"sub1@example.com", "sub2@example.com"})
+        self.assertIn("Top new jobs:", mail.outbox[0].body)
+        self.assertIn("Role 0 at Acme", mail.outbox[0].body)
+        self.assertIn("Additional new jobs not listed: 2", mail.outbox[0].body)
+
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_EMAIL="automoto@example.com",
+    )
+    @patch("job_scraper.management.commands.run_scheduler.execute_scrape_run")
+    @patch("job_scraper.management.commands.run_scheduler.send_scheduled_scrape_summary")
+    def test_run_scheduled_scrape_records_email_errors(
+        self, send_summary_mock, execute_mock
+    ):
+        schedule = ScheduledScrape.objects.create(
+            name="Broken Email Run",
+            keywords="python",
+            countries="us",
+            location="us",
+            cron_expression="*/30 * * * *",
+            timezone="UTC",
+        )
+        schedule.websites.set([self.website_one])
+        schedule.subscribers.set([self.subscriber_one])
+        execute_mock.return_value = ([], 0)
+        send_summary_mock.side_effect = RuntimeError("smtp down")
+
+        run_scheduled_scrape(schedule.id)
+
+        run = ScheduledScrapeRun.objects.get(schedule=schedule)
+        self.assertEqual(run.jobs_new, 0)
+        self.assertEqual(run.emails_sent, 0)
+        self.assertEqual(run.email_error, "smtp down")
 
 
 class DashboardViewTests(TestCase):

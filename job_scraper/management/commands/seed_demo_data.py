@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
@@ -9,12 +10,12 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument(
             "--email",
-            default="admin@example.com",
+            default=settings.SEED_DEMO_ADMIN_EMAIL,
             help="Email for the dev superuser",
         )
         parser.add_argument(
             "--password",
-            default="admin12345",
+            default=settings.SEED_DEMO_ADMIN_PASSWORD,
             help="Password for the dev superuser",
         )
         parser.add_argument(

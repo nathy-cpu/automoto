@@ -38,6 +38,23 @@ SECRET_KEY=replace-this
 ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
+Or start from the checked-in template:
+
+```bash
+cp .env.example .env
+```
+
+The template includes runtime knobs for:
+
+- time zone
+- scrape defaults
+- scraper timeouts
+- anti-bot cooldowns
+- scheduler cleanup
+- stealth browser sizing/warm-up behavior
+- email delivery
+- demo seed credentials
+
 ### 4. Run database migrations
 
 ```bash
@@ -124,6 +141,35 @@ If you add or edit schedules, restart the scheduler process so it reloads them.
 ### Test a schedule immediately
 
 Use the `Run selected schedules now` admin action from the scheduled scrape changelist.
+
+### Email subscriptions
+
+Each scheduled scrape can have multiple subscribed users.
+
+After a scheduled run completes, subscribed users receive:
+
+- a summary email
+- the number of new jobs found
+- the top 10 new jobs
+- a dashboard link for deeper review
+
+Email backend behavior:
+
+- development default: Django console email backend
+- production default: SMTP backend
+
+Useful environment variables:
+
+- `EMAIL_BACKEND`
+- `EMAIL_HOST`
+- `EMAIL_PORT`
+- `EMAIL_HOST_USER`
+- `EMAIL_HOST_PASSWORD`
+- `EMAIL_USE_TLS`
+- `EMAIL_USE_SSL`
+- `DEFAULT_FROM_EMAIL`
+- `EMAIL_SUBJECT_PREFIX`
+- `SITE_DOMAIN`
 
 You can override that user:
 

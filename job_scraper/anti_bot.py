@@ -2,6 +2,7 @@ import random
 import time
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
@@ -18,8 +19,8 @@ CHALLENGE_MARKERS = (
     "/sorry/index",
 )
 BLOCK_STATUS_CODES = {403, 429, 503}
-FAILURE_THRESHOLD = 3
-COOLDOWN_SECONDS = 60 * 60
+FAILURE_THRESHOLD = settings.ANTI_BOT_FAILURE_THRESHOLD
+COOLDOWN_SECONDS = settings.ANTI_BOT_COOLDOWN_SECONDS
 
 
 def classify_anti_bot_response(status_code=None, html_content="", card_count=0):

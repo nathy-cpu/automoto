@@ -1,6 +1,7 @@
 from zoneinfo import available_timezones
 
 from apscheduler.triggers.cron import CronTrigger
+from django.conf import settings
 from django.db import models
 
 # Create your models here.
@@ -176,6 +177,11 @@ class ScraperExecutionLog(models.Model):
 class ScheduledScrape(models.Model):
     name = models.CharField(max_length=120, unique=True)
     websites = models.ManyToManyField(CustomWebsite, related_name="scheduled_scrapes")
+    subscribers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        blank=True,
+        related_name="scheduled_scrape_subscriptions",
+    )
     keywords = models.CharField(max_length=255, blank=True)
     countries = models.CharField(
         max_length=255,
@@ -222,3 +228,21 @@ class ScheduledScrape(models.Model):
             from django.core.exceptions import ValidationError
 
             raise ValidationError({"cron_expression": f"Invalid cron expression: {exc}"})
+
+
+class ScheduledScrapeRun(models.Model):
+    schedule = models.ForeignKey(
+        ScheduledScrape, on_delete=models.CASCADE, related_name="runs"
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    jobs_new = models.PositiveIntegerField(default=0)
+    contacts_found = models.PositiveIntegerField(default=0)
+    emails_sent = models.PositiveIntegerField(default=0)
+    email_error = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"{self.schedule.name} @ {self.started_at:%Y-%m-%d %H:%M}"

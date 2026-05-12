@@ -1,6 +1,7 @@
 import logging
 import time
 
+from django.conf import settings
 from django.core.management.base import BaseCommand
 
 from job_scraper.apollo_client import ApolloClient
@@ -10,12 +11,14 @@ logger = logging.getLogger(__name__)
 
 
 def execute_scrape_run(
-    *, keywords: str, location: str, limit: int = 10, max_pages: int = 1, website_ids=None
+    *, keywords: str, location: str, limit: int = None, max_pages: int = None, website_ids=None
 ):
     started_at = time.monotonic()
     scraper = JobScraper()
     all_new_jobs = []
     website_ids = website_ids or [None]
+    limit = settings.DEFAULT_ENRICHMENT_LIMIT if limit is None else limit
+    max_pages = settings.DEFAULT_SCRAPE_MAX_PAGES if max_pages is None else max_pages
 
     logger.info(
         "run_scraper_start keywords=%s location=%s limit=%s max_pages=%s website_ids=%s",
@@ -59,10 +62,18 @@ class Command(BaseCommand):
     help = "Runs the Indeed scraper and enriches found leads with Apollo data."
 
     def add_arguments(self, parser):
-        parser.add_argument("--keywords", type=str, default="software contract")
-        parser.add_argument("--location", type=str, default="us")
-        parser.add_argument("--limit", type=int, default=10)
-        parser.add_argument("--max-pages", type=int, default=1)
+        parser.add_argument(
+            "--keywords", type=str, default=settings.DEFAULT_SCRAPE_KEYWORDS
+        )
+        parser.add_argument(
+            "--location", type=str, default=settings.DEFAULT_SCRAPE_LOCATION
+        )
+        parser.add_argument(
+            "--limit", type=int, default=settings.DEFAULT_ENRICHMENT_LIMIT
+        )
+        parser.add_argument(
+            "--max-pages", type=int, default=settings.DEFAULT_SCRAPE_MAX_PAGES
+        )
         parser.add_argument("--website-id", action="append", type=int, default=[])
 
     def handle(self, *args, **options):

@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from typing import List
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 
 import requests
@@ -109,7 +110,7 @@ class ApiScraper:
             website.id,
             url,
         )
-        return requests.get(url, timeout=30)
+        return requests.get(url, timeout=settings.API_SCRAPER_TIMEOUT_SECONDS)
 
     def _parse_response(self, response):
         json_dump = response.text if hasattr(response, "text") else ""

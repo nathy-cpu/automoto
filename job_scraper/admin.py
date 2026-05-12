@@ -2,7 +2,14 @@ from django.contrib import admin
 from django.contrib import messages
 
 from .management.commands.run_scheduler import run_scheduled_scrape
-from .models import Contact, CustomWebsite, Job, ScheduledScrape, ScraperExecutionLog
+from .models import (
+    Contact,
+    CustomWebsite,
+    Job,
+    ScheduledScrape,
+    ScheduledScrapeRun,
+    ScraperExecutionLog,
+)
 
 
 @admin.register(Job)
@@ -118,6 +125,7 @@ class ScheduledScrapeAdmin(admin.ModelAdmin):
         "cron_expression",
         "timezone",
         "location_summary",
+        "subscriber_count",
         "max_pages",
         "is_active",
         "updated_at",
@@ -130,8 +138,9 @@ class ScheduledScrapeAdmin(admin.ModelAdmin):
         "continents",
         "location",
         "cron_expression",
+        "subscribers__email",
     )
-    filter_horizontal = ("websites",)
+    filter_horizontal = ("websites", "subscribers")
     readonly_fields = ("created_at", "updated_at")
     actions = ("run_selected_schedules_now",)
     fieldsets = (
@@ -142,6 +151,7 @@ class ScheduledScrapeAdmin(admin.ModelAdmin):
                     "name",
                     "is_active",
                     "websites",
+                    "subscribers",
                     "keywords",
                     "countries",
                     "continents",
@@ -186,3 +196,37 @@ class ScheduledScrapeAdmin(admin.ModelAdmin):
         return obj.countries or obj.continents or obj.location
 
     location_summary.short_description = "Search Region"
+
+    def subscriber_count(self, obj):
+        return obj.subscribers.count()
+
+    subscriber_count.short_description = "Subscribers"
+
+
+@admin.register(ScheduledScrapeRun)
+class ScheduledScrapeRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "schedule",
+        "started_at",
+        "completed_at",
+        "jobs_new",
+        "contacts_found",
+        "emails_sent",
+        "has_email_error",
+    )
+    list_filter = ("schedule", "started_at", "completed_at")
+    readonly_fields = (
+        "schedule",
+        "started_at",
+        "completed_at",
+        "jobs_new",
+        "contacts_found",
+        "emails_sent",
+        "email_error",
+    )
+
+    def has_email_error(self, obj):
+        return bool(obj.email_error)
+
+    has_email_error.boolean = True
+    has_email_error.short_description = "Email Error"

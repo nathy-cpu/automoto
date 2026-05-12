@@ -6,6 +6,7 @@ import uuid
 from typing import Dict, List, Optional
 from urllib.parse import urljoin
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 
 import requests
@@ -174,7 +175,10 @@ class JobScraper:
 
         for page in range(max_pages):
             try:
-                jitter_sleep(1.2, 3.0)
+                jitter_sleep(
+                    settings.REQUEST_PAGE_JITTER_MIN_SECONDS,
+                    settings.REQUEST_PAGE_JITTER_MAX_SECONDS,
+                )
 
                 # Build search URL
                 search_url = website.search_url
@@ -185,7 +189,9 @@ class JobScraper:
                 if "{page}" in search_url:
                     search_url = search_url.replace("{page}", str(page + 1))
 
-                response = self.session.get(search_url, timeout=30)
+                response = self.session.get(
+                    search_url, timeout=settings.REQUEST_SCRAPER_TIMEOUT_SECONDS
+                )
                 html_content = response.text if hasattr(response, "text") else ""
                 soup = BeautifulSoup(response.content, "html.parser")
                 job_cards = soup.select(website.job_list_selector)
@@ -257,7 +263,10 @@ class JobScraper:
                                 and website.description_selector
                                 and detail_fetch_count < detail_fetch_limit
                             ):
-                                jitter_sleep(0.8, 1.8)
+                                jitter_sleep(
+                                    settings.REQUEST_DETAIL_JITTER_MIN_SECONDS,
+                                    settings.REQUEST_DETAIL_JITTER_MAX_SECONDS,
+                                )
                                 detail_data = self._get_custom_details(
                                     job_data["job_url"], website
                                 )
@@ -312,7 +321,10 @@ class JobScraper:
                         )
                         continue
 
-                jitter_sleep(1.0, 2.4)
+                jitter_sleep(
+                    settings.REQUEST_BETWEEN_PAGES_JITTER_MIN_SECONDS,
+                    settings.REQUEST_BETWEEN_PAGES_JITTER_MAX_SECONDS,
+                )
 
             except Exception as e:
                 logger.exception(
@@ -362,7 +374,9 @@ class JobScraper:
     def _get_custom_details(self, job_url: str, website: CustomWebsite) -> Dict:
         """Fetch job detail page using custom selectors"""
         try:
-            response = self.session.get(job_url, timeout=20)
+            response = self.session.get(
+                job_url, timeout=settings.REQUEST_DETAIL_TIMEOUT_SECONDS
+            )
             response.raise_for_status()
             soup = BeautifulSoup(response.content, "html.parser")
 

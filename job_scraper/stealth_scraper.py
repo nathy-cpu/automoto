@@ -6,6 +6,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime
 
+from django.conf import settings
 from django.core.files.base import ContentFile
 
 from bs4 import BeautifulSoup
@@ -111,8 +112,14 @@ class StealthScraper:
                 self._session_manager = self._build_session_manager()
 
     def _build_session_manager(self):
-        width = random.randint(1200, 1920)
-        height = random.randint(800, 1080)
+        width = random.randint(
+            settings.STEALTH_WINDOW_WIDTH_MIN,
+            settings.STEALTH_WINDOW_WIDTH_MAX,
+        )
+        height = random.randint(
+            settings.STEALTH_WINDOW_HEIGHT_MIN,
+            settings.STEALTH_WINDOW_HEIGHT_MAX,
+        )
         return SB(
             browser="chrome",
             headless2=self.headless,
@@ -144,10 +151,7 @@ class StealthScraper:
 
     def _warm_up_session(self):
         """Build trust by visiting neutral sites before the target."""
-        warm_up_sites = [
-            "https://www.google.com/search?q=latest+technology+news",
-            "https://en.wikipedia.org/wiki/Main_Page",
-        ]
+        warm_up_sites = settings.STEALTH_WARMUP_SITES
         logger.info(
             "starting_browser_warming_phase run_id=%s sites=%d",
             self._run_id,
@@ -156,13 +160,21 @@ class StealthScraper:
 
         for site in warm_up_sites:
             try:
-                self._driver.uc_open_with_reconnect(site, reconnect_time=5)
-                jitter_sleep(2, 4)
+                self._driver.uc_open_with_reconnect(
+                    site, reconnect_time=settings.STEALTH_RECONNECT_TIME_SECONDS
+                )
+                jitter_sleep(
+                    settings.STEALTH_WARMUP_PAGE_JITTER_MIN_SECONDS,
+                    settings.STEALTH_WARMUP_PAGE_JITTER_MAX_SECONDS,
+                )
                 # Simulate a little bit of interest
                 self._driver.execute_script(
                     f"window.scrollTo(0, {random.randint(300, 700)});"
                 )
-                jitter_sleep(1, 2)
+                jitter_sleep(
+                    settings.STEALTH_WARMUP_SCROLL_JITTER_MIN_SECONDS,
+                    settings.STEALTH_WARMUP_SCROLL_JITTER_MAX_SECONDS,
+                )
             except Exception as e:
                 logger.debug(
                     "warming_site_failed run_id=%s site=%s error=%s",
@@ -231,9 +243,15 @@ class StealthScraper:
         )
 
         try:
-            jitter_sleep(1.5, 3.2)
+            jitter_sleep(
+                settings.STEALTH_PAGE_JITTER_MIN_SECONDS,
+                settings.STEALTH_PAGE_JITTER_MAX_SECONDS,
+            )
             self._open_url(url)
-            jitter_sleep(3.0, 5.5)
+            jitter_sleep(
+                settings.STEALTH_POST_OPEN_JITTER_MIN_SECONDS,
+                settings.STEALTH_POST_OPEN_JITTER_MAX_SECONDS,
+            )
 
             if not self._attempt_captcha_solver(website, page_num, state):
                 return False
