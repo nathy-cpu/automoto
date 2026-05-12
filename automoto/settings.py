@@ -59,6 +59,12 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 
 # Application definition
 
@@ -76,6 +82,7 @@ INSTALLED_APPS = [
 
 ENABLE_DEBUG_TOOLBAR = DEBUG and _module_available("debug_toolbar")
 ENABLE_ADMIN_SHELL = DEBUG and _module_available("django_admin_shell")
+ENABLE_WHITENOISE = _module_available("whitenoise")
 
 if ENABLE_DEBUG_TOOLBAR:
     INSTALLED_APPS.append("debug_toolbar")
@@ -99,6 +106,9 @@ MIDDLEWARE = [
 
 if ENABLE_DEBUG_TOOLBAR:
     MIDDLEWARE.insert(0, "debug_toolbar.middleware.DebugToolbarMiddleware")
+
+if ENABLE_WHITENOISE:
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 
 ROOT_URLCONF = "automoto.urls"
 
@@ -126,7 +136,7 @@ WSGI_APPLICATION = "automoto.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": os.getenv("SQLITE_PATH", str(BASE_DIR / "db.sqlite3")),
     }
 }
 
@@ -167,6 +177,8 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+if ENABLE_WHITENOISE:
+    STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Additional locations of static files
 PROJECT_STATIC_DIR = BASE_DIR / "static"

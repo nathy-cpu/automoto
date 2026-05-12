@@ -52,9 +52,9 @@ RUN curl -fSsL https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY requirements.txt .
+COPY requirements.txt requirements-prod.txt ./
 RUN pip install --upgrade pip && \
-    pip install -r requirements.txt
+    pip install -r requirements-prod.txt
 
 # SeleniumBase needs to install its drivers (Chromedriver)
 # Running this as a separate step ensures the image is ready for scraping
@@ -63,8 +63,10 @@ RUN sbase install chromedriver
 # Copy project files
 COPY . .
 
-# Exposure
-EXPOSE 8000
+RUN chmod +x /app/entrypoint.sh
 
-# Default command (will be overridden by docker-compose)
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Exposure
+EXPOSE 7860
+
+# Default command for container platforms such as Hugging Face Spaces
+CMD ["/app/entrypoint.sh"]

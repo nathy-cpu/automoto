@@ -5,12 +5,16 @@ services:
     volumes:
       - .:/app
     ports:
-      - "8000:8000"
+      - "8000:7860"
     env_file:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
-    command: python manage.py runserver 0.0.0.0:8000
+      - PORT=7860
+      - RUN_MIGRATIONS=true
+      - RUN_COLLECTSTATIC=true
+      - RUN_SCHEDULER=false
+    command: /app/entrypoint.sh
     restart: unless-stopped
     shm_size: "2gb"
 
@@ -22,6 +26,8 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+      - RUN_MIGRATIONS=false
+      - RUN_COLLECTSTATIC=false
     command: python manage.py run_scheduler
     depends_on:
       - web

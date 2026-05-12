@@ -219,6 +219,57 @@ Run deterministic test suite:
 venv/bin/python manage.py test
 ```
 
+## Hugging Face Spaces
+
+This repo can run on a Docker Space.
+
+### Recommended Space type
+
+- SDK: `Docker`
+- Hardware: start with CPU Basic for testing
+- Persistent storage: recommended if you want SQLite data to survive restarts
+
+### Required setup
+
+1. Push this repository to a Hugging Face Docker Space.
+2. In the Space variables/secrets, set at least:
+
+```env
+DEBUG=False
+SECRET_KEY=replace-with-a-long-random-secret
+ALLOWED_HOSTS=your-space-name.hf.space
+CSRF_TRUSTED_ORIGINS=https://your-space-name.hf.space
+SITE_DOMAIN=your-space-name.hf.space
+SQLITE_PATH=/data/db.sqlite3
+RUN_MIGRATIONS=true
+RUN_COLLECTSTATIC=true
+RUN_SCHEDULER=false
+```
+
+3. If you enabled persistent storage, keep `SQLITE_PATH=/data/db.sqlite3`.
+4. If you want scheduled scrapes to run inside the same container, set `RUN_SCHEDULER=true`.
+
+### Email on Spaces
+
+For Gmail SMTP, set these secrets:
+
+```env
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_HOST_USER=youraddress@gmail.com
+EMAIL_HOST_PASSWORD=your-app-password
+EMAIL_USE_TLS=True
+EMAIL_USE_SSL=False
+DEFAULT_FROM_EMAIL=youraddress@gmail.com
+```
+
+### Notes
+
+- The container starts with `/app/entrypoint.sh`.
+- On boot it can run migrations, collect static files, optionally seed demo data, optionally start the scheduler, then launch Gunicorn.
+- Running the scheduler in the same container is acceptable for a testing environment, but not ideal for scaled production.
+
 ## Notes
 
 - Scraping behavior depends on external site markup and availability.
