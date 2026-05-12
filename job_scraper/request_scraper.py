@@ -111,7 +111,7 @@ class JobScraper:
                 elif website.use_stealth:
                     from .stealth_scraper import StealthScraper
 
-                    scraper = StealthScraper(headless=False)
+                    scraper = StealthScraper(headless=True)
                     jobs = scraper.scrape(website, keywords, country, max_pages)
                     all_new_jobs.extend(jobs)
                 else:
