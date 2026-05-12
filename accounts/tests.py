@@ -114,6 +114,6 @@ class SeedDemoDataCommandTests(TestCase):
 
         from job_scraper.models import Contact, CustomWebsite, Job
 
-        self.assertEqual(CustomWebsite.objects.filter(is_active=True).count(), 3)
+        self.assertEqual(CustomWebsite.objects.filter(is_active=True).count(), 5)
         self.assertEqual(Job.objects.count(), 3)
         self.assertGreaterEqual(Contact.objects.count(), 4)

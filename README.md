@@ -4,7 +4,7 @@ Django app for searching jobs across supported job sites and user-defined custom
 
 ## Current Scope
 
-- Built-in sources: `Indeed`, `LinkedIn`
+- Built-in sources: `Indeed`, `LinkedIn`, `We Work Remotely`, `Arbeitnow (API)`, `Remotive (API)`
 - Custom sources: user-managed websites using CSS selectors
 - Server-rendered dashboard with database-backed results and pagination
 
