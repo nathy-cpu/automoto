@@ -1,3 +1,6 @@
+from zoneinfo import available_timezones
+
+from apscheduler.triggers.cron import CronTrigger
 from django.db import models
 
 # Create your models here.
@@ -168,3 +171,54 @@ class ScraperExecutionLog(models.Model):
     def __str__(self):
         status = "Error" if self.error_message else "Success"
         return f"{self.website.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M')} [{status}]"
+
+
+class ScheduledScrape(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    websites = models.ManyToManyField(CustomWebsite, related_name="scheduled_scrapes")
+    keywords = models.CharField(max_length=255, blank=True)
+    countries = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Comma-separated countries, same as manual scrape input.",
+    )
+    continents = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Comma-separated continents, same as manual scrape input.",
+    )
+    location = models.CharField(
+        max_length=100,
+        default="us",
+        help_text="Fallback location if countries and continents are blank.",
+    )
+    cron_expression = models.CharField(
+        max_length=100,
+        help_text="Standard 5-field cron expression, e.g. '*/30 * * * *'",
+    )
+    timezone = models.CharField(max_length=64, default="UTC")
+    max_pages = models.PositiveSmallIntegerField(default=1)
+    enrichment_limit = models.PositiveSmallIntegerField(default=10)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        super().clean()
+        if self.timezone not in available_timezones():
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError({"timezone": "Enter a valid IANA timezone."})
+
+        try:
+            CronTrigger.from_crontab(self.cron_expression, timezone=self.timezone)
+        except ValueError as exc:
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError({"cron_expression": f"Invalid cron expression: {exc}"})

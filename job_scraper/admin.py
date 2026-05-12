@@ -1,6 +1,8 @@
 from django.contrib import admin
+from django.contrib import messages
 
-from .models import Contact, CustomWebsite, Job, ScraperExecutionLog
+from .management.commands.run_scheduler import run_scheduled_scrape
+from .models import Contact, CustomWebsite, Job, ScheduledScrape, ScraperExecutionLog
 
 
 @admin.register(Job)
@@ -107,3 +109,80 @@ class ScraperExecutionLogAdmin(admin.ModelAdmin):
 
     has_error.boolean = True
     has_error.short_description = "Error"
+
+
+@admin.register(ScheduledScrape)
+class ScheduledScrapeAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "cron_expression",
+        "timezone",
+        "location_summary",
+        "max_pages",
+        "is_active",
+        "updated_at",
+    )
+    list_filter = ("is_active", "timezone")
+    search_fields = (
+        "name",
+        "keywords",
+        "countries",
+        "continents",
+        "location",
+        "cron_expression",
+    )
+    filter_horizontal = ("websites",)
+    readonly_fields = ("created_at", "updated_at")
+    actions = ("run_selected_schedules_now",)
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "name",
+                    "is_active",
+                    "websites",
+                    "keywords",
+                    "countries",
+                    "continents",
+                    "location",
+                )
+            },
+        ),
+        (
+            "Timing",
+            {
+                "fields": ("cron_expression", "timezone"),
+                "description": "Use a standard 5-field cron expression such as '*/30 * * * *' for every 30 minutes.",
+            },
+        ),
+        (
+            "Run Behavior",
+            {
+                "fields": ("max_pages", "enrichment_limit"),
+            },
+        ),
+        (
+            "Metadata",
+            {
+                "fields": ("created_at", "updated_at"),
+            },
+        ),
+    )
+
+    @admin.action(description="Run selected schedules now")
+    def run_selected_schedules_now(self, request, queryset):
+        run_count = 0
+        for schedule in queryset:
+            run_scheduled_scrape(schedule.id)
+            run_count += 1
+        self.message_user(
+            request,
+            f"Triggered {run_count} scheduled scrape(s). Scheduler restart is still required for cron changes.",
+            level=messages.SUCCESS,
+        )
+
+    def location_summary(self, obj):
+        return obj.countries or obj.continents or obj.location
+
+    location_summary.short_description = "Search Region"

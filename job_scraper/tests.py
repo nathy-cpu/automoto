@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
@@ -16,7 +17,11 @@ from job_scraper.anti_bot import (
 )
 from job_scraper.api_scraper import ApiScraper
 from job_scraper.apollo_client import ApolloClient
-from job_scraper.models import CustomWebsite, Job, ScraperExecutionLog
+from job_scraper.management.commands.run_scheduler import (
+    register_scheduled_scrapes,
+    run_scheduled_scrape,
+)
+from job_scraper.models import CustomWebsite, Job, ScheduledScrape, ScraperExecutionLog
 from job_scraper.request_scraper import JobScraper
 from job_scraper.stealth_scraper import StealthScraper
 from job_scraper.utils import parse_location_components
@@ -65,6 +70,99 @@ class ModelTests(TestCase):
 
         self.assertEqual(website.name, "RemoteBoard")
         self.assertTrue(website.is_active)
+
+    def test_scheduled_scrape_validates_cron_expression(self):
+        schedule = ScheduledScrape(
+            name="Invalid",
+            location="us",
+            cron_expression="not a cron",
+            timezone="UTC",
+        )
+
+        with self.assertRaises(ValidationError):
+            schedule.full_clean()
+
+    def test_scheduled_scrape_validates_timezone(self):
+        schedule = ScheduledScrape(
+            name="Bad TZ",
+            location="us",
+            cron_expression="*/30 * * * *",
+            timezone="Mars/Base",
+        )
+
+        with self.assertRaises(ValidationError):
+            schedule.full_clean()
+
+
+class ScheduledScrapeSchedulerTests(TestCase):
+    def setUp(self):
+        self.website_one = create_custom_website(name="Source One")
+        self.website_two = create_custom_website(name="Source Two")
+
+    @patch("job_scraper.management.commands.run_scheduler.execute_scrape_run")
+    def test_run_scheduled_scrape_executes_for_all_selected_sources(self, execute_mock):
+        schedule = ScheduledScrape.objects.create(
+            name="Morning Run",
+            keywords="python",
+            countries="us, germany",
+            continents="Europe",
+            location="ca",
+            cron_expression="*/30 * * * *",
+            timezone="UTC",
+            max_pages=2,
+            enrichment_limit=5,
+        )
+        schedule.websites.set([self.website_one, self.website_two])
+
+        run_scheduled_scrape(schedule.id)
+
+        execute_mock.assert_called_once_with(
+            keywords="python",
+            location="us",
+            limit=5,
+            max_pages=2,
+            website_ids=[self.website_one.id, self.website_two.id],
+        )
+
+    def test_register_scheduled_scrapes_only_registers_active_schedules_with_sources(self):
+        active = ScheduledScrape.objects.create(
+            name="Active",
+            keywords="python",
+            countries="us",
+            location="us",
+            cron_expression="0 */6 * * *",
+            timezone="UTC",
+        )
+        active.websites.set([self.website_one])
+
+        inactive = ScheduledScrape.objects.create(
+            name="Inactive",
+            keywords="data",
+            countries="de",
+            location="de",
+            cron_expression="0 8 * * *",
+            timezone="UTC",
+            is_active=False,
+        )
+        inactive.websites.set([self.website_two])
+
+        empty = ScheduledScrape.objects.create(
+            name="Empty",
+            keywords="ops",
+            continents="Europe",
+            location="uk",
+            cron_expression="0 9 * * 1-5",
+            timezone="UTC",
+        )
+
+        scheduler = Mock()
+
+        register_scheduled_scrapes(scheduler)
+
+        scheduler.add_job.assert_called_once()
+        _, kwargs = scheduler.add_job.call_args
+        self.assertEqual(kwargs["args"], [active.id])
+        self.assertEqual(kwargs["id"], f"scheduled_scrape_{active.id}")
 
 
 class DashboardViewTests(TestCase):

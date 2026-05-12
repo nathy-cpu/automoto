@@ -17,6 +17,7 @@ from django.views.decorators.http import require_POST
 
 from .models import CustomWebsite, Job
 from .request_scraper import JobScraper
+from .utils import resolve_scrape_location
 
 logger = logging.getLogger(__name__)
 
@@ -287,10 +288,10 @@ def trigger_scrape(request: HttpRequest):
         for item in request.POST.get("continents", "").split(",")
         if item.strip()
     ]
-    location = (
-        country_filters[0]
-        if country_filters
-        else (continent_filters[0] if continent_filters else "us")
+    location = resolve_scrape_location(
+        countries=",".join(country_filters),
+        continents=",".join(continent_filters),
+        fallback_location="us",
     )
     source_id = request.POST.get("source_id")
 

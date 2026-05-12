@@ -67,6 +67,22 @@ COUNTRY_SPECIAL_CASES = {
 LOCATION_SPLIT_RE = re.compile(r"\s*,\s*")
 
 
+def parse_csv_list(value):
+    return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+
+def resolve_scrape_location(countries="", continents="", fallback_location="us"):
+    country_filters = parse_csv_list(countries)
+    if country_filters:
+        return country_filters[0]
+
+    continent_filters = parse_csv_list(continents)
+    if continent_filters:
+        return continent_filters[0]
+
+    return (fallback_location or "us").strip() or "us"
+
+
 def get_continent_from_country(country_name):
     """
     Returns the continent name for a given country name.

@@ -1,7 +1,6 @@
 import logging
 
 from django.conf import settings
-from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -10,19 +9,71 @@ from django_apscheduler import util
 from django_apscheduler.jobstores import DjangoJobStore
 from django_apscheduler.models import DjangoJobExecution
 
+from job_scraper.management.commands.run_scraper import execute_scrape_run
+from job_scraper.models import ScheduledScrape
+from job_scraper.utils import resolve_scrape_location
+
 logger = logging.getLogger(__name__)
 
 
-def run_scraper_task():
-    logger.info("Running scheduled scraper task...")
+def run_scheduled_scrape(schedule_id):
     try:
-        # Default run with some common keywords
-        call_command(
-            "run_scraper", keywords="software contract", location="us", limit=20
+        schedule = ScheduledScrape.objects.prefetch_related("websites").get(
+            id=schedule_id, is_active=True
         )
-        call_command("run_scraper", keywords="it rfp", location="uk", limit=20)
+        website_ids = list(schedule.websites.values_list("id", flat=True))
+        logger.info(
+            "scheduled_scrape_start schedule_id=%s name=%s websites=%s cron=%s",
+            schedule.id,
+            schedule.name,
+            website_ids,
+            schedule.cron_expression,
+        )
+        location = resolve_scrape_location(
+            countries=schedule.countries,
+            continents=schedule.continents,
+            fallback_location=schedule.location,
+        )
+        execute_scrape_run(
+            keywords=schedule.keywords,
+            location=location,
+            limit=schedule.enrichment_limit,
+            max_pages=schedule.max_pages,
+            website_ids=website_ids,
+        )
     except Exception:
-        logger.exception("scheduled_scraper_task_failed")
+        logger.exception("scheduled_scraper_task_failed schedule_id=%s", schedule_id)
+
+
+def register_scheduled_scrapes(scheduler):
+    for schedule in ScheduledScrape.objects.filter(is_active=True).prefetch_related(
+        "websites"
+    ):
+        if not schedule.websites.exists():
+            logger.warning(
+                "scheduled_scrape_skipped_no_websites schedule_id=%s name=%s",
+                schedule.id,
+                schedule.name,
+            )
+            continue
+
+        scheduler.add_job(
+            run_scheduled_scrape,
+            trigger=CronTrigger.from_crontab(
+                schedule.cron_expression, timezone=schedule.timezone
+            ),
+            args=[schedule.id],
+            id=f"scheduled_scrape_{schedule.id}",
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info(
+            "scheduled_scrape_registered schedule_id=%s name=%s cron=%s timezone=%s",
+            schedule.id,
+            schedule.name,
+            schedule.cron_expression,
+            schedule.timezone,
+        )
 
 
 @util.close_old_connections
@@ -36,16 +87,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         scheduler = BlockingScheduler(timezone=settings.TIME_ZONE)
         scheduler.add_jobstore(DjangoJobStore(), "default")
-
-        # Run twice daily: at 08:00 and 20:00
-        scheduler.add_job(
-            run_scraper_task,
-            trigger=CronTrigger(hour="8,20", minute="0"),
-            id="run_scraper_task",
-            max_instances=1,
-            replace_existing=True,
-        )
-        logger.info("Added twice-daily job: run_scraper_task.")
+        register_scheduled_scrapes(scheduler)
 
         scheduler.add_job(
             delete_old_job_executions,

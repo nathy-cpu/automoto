@@ -87,6 +87,44 @@ User accounts are admin-created only.
 2. Uncheck `Active`.
 3. Save.
 
+## Scheduled Scrapes
+
+Scheduled scrapes are managed in Django admin only.
+
+### Create a scheduled scrape
+
+1. Sign in to `http://localhost:8000/admin/`.
+2. Open `Scheduled scrapes`.
+3. Create a new schedule.
+4. Choose one or more source websites.
+5. Set the same search inputs used by manual scrapes:
+   - `keywords`
+   - `countries` as a comma-separated list
+   - `continents` as a comma-separated list
+   - `location` only as a fallback if countries and continents are blank
+6. Set max pages and enrichment limit.
+7. Enter a 5-field cron expression such as:
+   - `*/30 * * * *` for every 30 minutes
+   - `0 * * * *` for hourly
+   - `0 8,20 * * *` for 8:00 and 20:00 daily
+8. Set an IANA timezone like `UTC` or `America/New_York`.
+9. Keep `Active` enabled and save.
+
+Location resolution matches the manual scrape button:
+
+- first country if any countries are set
+- otherwise first continent if any continents are set
+- otherwise fallback location
+
+### Apply schedule changes
+
+The scheduler command reads schedules from the database when it starts.
+If you add or edit schedules, restart the scheduler process so it reloads them.
+
+### Test a schedule immediately
+
+Use the `Run selected schedules now` admin action from the scheduled scrape changelist.
+
 You can override that user:
 
 ```bash
