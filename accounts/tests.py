@@ -113,4 +113,4 @@ class SeedDemoDataCommandTests(TestCase):
 
         from job_scraper.models import CustomWebsite
 
-        self.assertEqual(CustomWebsite.objects.filter(is_active=True).count(), 5)
+        self.assertEqual(CustomWebsite.objects.filter(is_active=True).count(), 7)

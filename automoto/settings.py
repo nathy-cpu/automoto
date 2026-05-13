@@ -217,7 +217,10 @@ LOGIN_RATE_WINDOW_SECONDS = int(os.getenv("LOGIN_RATE_WINDOW_SECONDS", "300"))
 REQUEST_RATE_LIMIT = int(os.getenv("REQUEST_RATE_LIMIT", "240"))
 REQUEST_RATE_WINDOW_SECONDS = int(os.getenv("REQUEST_RATE_WINDOW_SECONDS", "60"))
 RESULTS_PER_PAGE = _env_int("RESULTS_PER_PAGE", 10)
-DEFAULT_SCRAPE_KEYWORDS = os.getenv("DEFAULT_SCRAPE_KEYWORDS", "software contract")
+DEFAULT_SCRAPE_KEYWORDS = os.getenv(
+    "DEFAULT_SCRAPE_KEYWORDS",
+    "IT services RFP, software development proposal, digital transformation consulting, system integration services, technology vendor selection",
+)
 DEFAULT_SCRAPE_LOCATION = os.getenv("DEFAULT_SCRAPE_LOCATION", "us")
 DEFAULT_SCRAPE_MAX_PAGES = _env_int("DEFAULT_SCRAPE_MAX_PAGES", 1)
 DEFAULT_ENRICHMENT_LIMIT = _env_int("DEFAULT_ENRICHMENT_LIMIT", 10)

@@ -26,6 +26,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         call_command("seed_websites")
+        call_command("seed_scheduled_scrapes")
 
         if not options["skip_user"]:
             self._seed_user(options["email"], options["password"])

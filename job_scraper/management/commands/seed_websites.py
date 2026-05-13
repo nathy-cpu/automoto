@@ -77,6 +77,32 @@ DEFAULT_WEBSITES = [
         "api_description_key": "description",
         "api_url_key": "url",
     },
+    {
+        "name": "TED EU Tenders",
+        "base_url": "https://ted.europa.eu",
+        "search_url": "https://ted.europa.eu/TED/search/search.do?keywords={keywords}&language=en&pageNo=1&sortBy=0&status=0&yearFilter=0",
+        "job_list_selector": ".searchResults tr, .notice-list-item",
+        "title_selector": "a[href*='/TED/view/'] span, .notice-title a",
+        "company_selector": ".notice-buyer, .buyer-name",
+        "location_selector": ".notice-country, .country-name",
+        "date_selector": ".notice-date, .pub-date",
+        "job_link_selector": ".notice-title a, a[href*='/TED/view/']",
+        "description_selector": ".notice-content, .TED-content",
+        "use_stealth": True,
+    },
+    {
+        "name": "UK Contracts Finder",
+        "base_url": "https://www.contractsfinder.service.gov.uk",
+        "search_url": "https://www.contractsfinder.service.gov.uk/Search/Results?&searchQuery={keywords}",
+        "job_list_selector": ".search-result, .notice-item, .opportunity-card",
+        "title_selector": ".search-result-title a, .notice-title a",
+        "company_selector": ".search-result-organisation, .buyer-name",
+        "location_selector": ".search-result-location, .notice-location",
+        "date_selector": ".search-result-date, .notice-published",
+        "job_link_selector": ".search-result-title a, .notice-title a",
+        "description_selector": ".search-result-description, .notice-detail",
+        "use_stealth": True,
+    },
 ]
 
 
