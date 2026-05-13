@@ -137,9 +137,7 @@
                                 {% endif %}
 
                                 <div class="description-text pre-wrap-text">
-                                    {{ job.description|default:"No detailed
-                                    description available yet. Our system is
-                                    still scanning this lead." }}
+                                    {{ job.description|default:"No detailed description available yet. Our system is still scanning this lead." }}
                                 </div>
                             </div>
                         </section>
@@ -227,11 +225,7 @@
                                 </div>
                                 <div class="meta-item">
                                     <label>Posted</label>
-                                    <span
-                                        >{{
-                                        job.posted_date|default:job.created_at|date:"M
-                                        d, Y" }}</span
-                                    >
+                                    <span>{{ job.posted_date|default:job.created_at|date:"M d, Y" }}</span>
                                 </div>
                                 <div class="meta-item">
                                     <label>Source</label>
@@ -300,8 +294,8 @@
                                                     ></polyline>
                                                 </svg>
                                             </a>
-                                            {% endif %} {% if
-                                            contact.linkedin_url %}
+                                            {% endif %}
+                                            {% if contact.linkedin_url %}
                                             <a
                                                 href="{{ contact.linkedin_url }}"
                                                 target="_blank"
@@ -340,8 +334,7 @@
                                 </div>
                                 {% empty %}
                                 <div class="empty-contacts">
-                                    {% if enrichment_state == "running" or
-                                    enrichment_state == "pending" %}
+                                    {% if enrichment_state == "running" or enrichment_state == "pending" %}
                                     <div class="scanning-loader"></div>
                                     <p>
                                         Enrichment in progress... refreshing
