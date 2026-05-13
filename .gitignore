@@ -113,3 +113,4 @@ linkedin_search_files/
 # SeleniumBase
 downloaded_files/
 latest_logs/
+pyautogui.lock

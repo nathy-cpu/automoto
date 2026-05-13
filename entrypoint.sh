@@ -14,6 +14,10 @@ if [ "$DB_DIR" != "." ]; then
   mkdir -p "$DB_DIR"
 fi
 
+# Ensure SeleniumBase writable directories exist
+mkdir -p /app/downloaded_files
+chmod 777 /app/downloaded_files
+
 if [ "$RUN_MIGRATIONS" = "true" ]; then
   python manage.py migrate --noinput
 fi
