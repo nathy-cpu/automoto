@@ -8,6 +8,12 @@ RUN_COLLECTSTATIC="${RUN_COLLECTSTATIC:-true}"
 RUN_SCHEDULER="${RUN_SCHEDULER:-false}"
 SEED_ON_BOOT="${SEED_ON_BOOT:-false}"
 
+# Ensure the directory for the SQLite database exists
+DB_DIR="$(dirname "${SQLITE_PATH:-db.sqlite3}")"
+if [ "$DB_DIR" != "." ]; then
+  mkdir -p "$DB_DIR"
+fi
+
 if [ "$RUN_MIGRATIONS" = "true" ]; then
   python manage.py migrate --noinput
 fi

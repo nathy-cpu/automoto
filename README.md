@@ -244,6 +244,7 @@ SQLITE_PATH=/data/db.sqlite3
 RUN_MIGRATIONS=true
 RUN_COLLECTSTATIC=true
 RUN_SCHEDULER=false
+SECURE_SSL_REDIRECT=False
 ```
 
 3. If you enabled persistent storage, keep `SQLITE_PATH=/data/db.sqlite3`.
