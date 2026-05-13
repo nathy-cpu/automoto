@@ -12,6 +12,9 @@ from .models import (
     ScraperExecutionLog,
 )
 
+# Ensure admin uses its own login path, separate from the app's /accounts/login/
+admin.site.login_url = "/admin/login/"
+
 
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
