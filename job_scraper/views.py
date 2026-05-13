@@ -15,7 +15,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from .models import CustomWebsite, Job
+from .models import CustomWebsite, Job, ScheduledScrape
 from .request_scraper import JobScraper
 from .utils import resolve_scrape_location
 
@@ -513,4 +513,53 @@ def edit_website(request: HttpRequest, website_id: int) -> HttpResponse:
         request,
         "job_scraper/edit_website.html",
         {"website": website},
+    )
+
+
+@login_required
+def scheduled_scrapes(request: HttpRequest) -> HttpResponse:
+    user = request.user
+    subscribed_ids = set(
+        ScheduledScrape.objects.filter(subscribers=user).values_list("id", flat=True)
+    )
+
+    if request.method == "POST":
+        schedule_id = request.POST.get("schedule_id")
+        action = request.POST.get("action")
+        schedule = get_object_or_404(ScheduledScrape, id=schedule_id, is_active=True)
+
+        if action == "subscribe":
+            schedule.subscribers.add(user)
+            messages.success(
+                request, f'Subscribed to "{schedule.name}"'
+            )
+        elif action == "unsubscribe":
+            schedule.subscribers.remove(user)
+            messages.success(
+                request, f'Unsubscribed from "{schedule.name}"'
+            )
+        return redirect("scheduled_scrapes")
+
+    schedules = (
+        ScheduledScrape.objects.filter(is_active=True)
+        .prefetch_related("websites")
+        .order_by("name")
+    )
+
+    schedule_data = []
+    for schedule in schedules:
+        schedule_data.append(
+            {
+                "schedule": schedule,
+                "website_names": ", ".join(
+                    schedule.websites.values_list("name", flat=True)
+                ),
+                "subscribed": schedule.id in subscribed_ids,
+            }
+        )
+
+    return render(
+        request,
+        "job_scraper/scheduled_scrapes.html",
+        {"schedule_data": schedule_data},
     )

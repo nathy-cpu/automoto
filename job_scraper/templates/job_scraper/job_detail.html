@@ -23,6 +23,9 @@
                 <a href="{% url 'manage_websites' %}" class="nav-link"
                     >Manage Sources</a
                 >
+                <a href="{% url 'scheduled_scrapes' %}" class="nav-link"
+                    >Scheduled Scrapes</a
+                >
             </nav>
             <div class="actions">
                 <a href="{% url 'password_change' %}" class="nav-link"
@@ -92,7 +95,7 @@
                             href="{{ job.application_link }}"
                             target="_blank"
                             class="btn-apply btn-glow"
-                            >Apply Now</a
+                            >View Opportunity</a
                         >
                         {% endif %}
                     </div>

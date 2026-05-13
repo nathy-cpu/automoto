@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduled Scrapes | AutoMoto</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'job_scraper/css/base.css' %}">
+    <style>
+        .scrape-shell {
+            padding: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .scrape-shell h1 {
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            margin-bottom: 2rem;
+        }
+
+        .schedule-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.25rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: transform 0.2s;
+            display: flex;
+            gap: 1.5rem;
+        }
+
+        .schedule-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .schedule-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .schedule-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+        }
+
+        .schedule-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+            color: var(--text-dim);
+        }
+
+        .schedule-meta span {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+
+        .schedule-meta .label {
+            color: var(--text-main);
+            font-weight: 600;
+            min-width: 5rem;
+        }
+
+        .source-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.75rem;
+        }
+
+        .source-tag {
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--primary);
+            padding: 0.25rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.8rem;
+        }
+
+        .subscribe-form {
+            flex-shrink: 0;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .btn-subscribe {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 0.5rem 1.25rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-subscribe:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-unsubscribe {
+            background: transparent;
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            padding: 0.5rem 1.25rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: transform 0.2s;
+        }
+
+        .btn-unsubscribe:hover {
+            transform: translateY(-1px);
+            background: rgba(244, 114, 182, 0.1);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.25rem;
+            color: var(--text-dim);
+        }
+
+        .message {
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .success-message {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <a href="{% url 'dashboard' %}" class="logo">AutoMoto</a>
+        <nav class="nav-menu">
+            <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
+            <a href="{% url 'manage_websites' %}" class="nav-link">Manage Sources</a>
+            <a href="{% url 'scheduled_scrapes' %}" class="nav-link active">Scheduled Scrapes</a>
+        </nav>
+        <div class="actions">
+            <a href="{% url 'password_change' %}" class="nav-link">Change Password</a>
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="nav-link nav-button">Sign Out</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="scrape-shell">
+        <h1>Scheduled Scrapes</h1>
+        <p class="subtitle">Subscribe to automated discovery runs. You will receive email summaries when each run completes.</p>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message {% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        {% if schedule_data %}
+            {% for item in schedule_data %}
+                <div class="schedule-card">
+                    <div class="schedule-info">
+                        <div class="schedule-title">{{ item.schedule.name }}</div>
+                        <div class="schedule-meta">
+                            <span><span class="label">Cron</span> {{ item.schedule.cron_expression }}</span>
+                            <span><span class="label">Timezone</span> {{ item.schedule.timezone }}</span>
+                            <span><span class="label">Keywords</span> {{ item.schedule.keywords|default:"(none)" }}</span>
+                            <span><span class="label">Region</span> {{ item.schedule.countries|default:item.schedule.continents|default:item.schedule.location }}</span>
+                        </div>
+                        <div class="source-tags">
+                            {% for name in item.schedule.websites.all %}
+                                <span class="source-tag">{{ name }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="subscribe-form">
+                        <form method="post">
+                            {% csrf_token %}
+                            <input type="hidden" name="schedule_id" value="{{ item.schedule.id }}">
+                            {% if item.subscribed %}
+                                <button type="submit" name="action" value="unsubscribe" class="btn-unsubscribe">Unsubscribe</button>
+                            {% else %}
+                                <button type="submit" name="action" value="subscribe" class="btn-subscribe">Subscribe</button>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <h3>No scheduled scrapes available</h3>
+                <p style="margin-top: 0.5rem;">Ask an admin to create scheduled scrapes in Django admin.</p>
+            </div>
+        {% endif %}
+    </main>
+</body>
+</html>

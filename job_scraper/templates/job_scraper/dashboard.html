@@ -17,6 +17,7 @@
         <nav class="nav-menu">
             <a href="{% url 'dashboard' %}" class="nav-link active">Dashboard</a>
             <a href="{% url 'manage_websites' %}" class="nav-link">Manage Sources</a>
+            <a href="{% url 'scheduled_scrapes' %}" class="nav-link">Scheduled Scrapes</a>
         </nav>
         <div class="actions">
             <a href="{% url 'password_change' %}" class="nav-link">Change Password</a>
@@ -94,7 +95,7 @@
                 </div>
 
                 <div class="filter-group">
-                    <label class="filter-label">Scraping Source</label>
+                    <label class="filter-label">Lead Source</label>
                     <select name="source_id"
                         style="width: 100%; padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-main); font-family: inherit;">
                         <option value="all">All Sources</option>
@@ -118,7 +119,7 @@
                     formmethod="post"
                     style="margin-top: 0.5rem; background: linear-gradient(45deg, var(--accent), var(--secondary)); display: flex; justify-content: center; align-items: center; gap: 8px;"
                     onclick="document.getElementById('scrape-spinner-icon').style.display='inline-block'; this.style.pointerEvents='none'; this.style.opacity='0.8';">
-                    <span>Run New Scrape</span>
+                    <span>Run New Discovery</span>
                     <svg id="scrape-spinner-icon" style="display: none; animation: spin 1s linear infinite;" width="18"
                         height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
@@ -175,8 +176,8 @@
             {% else %}
             <div class="job-card" style="text-align: center; padding: 4rem;">
                 <h3>No leads found matching your criteria.</h3>
-                <p style="color: var(--text-dim); margin-top: 1rem;">Try adjusting your filters or run the scraper to
-                    fetch new data.</p>
+                <p style="color: var(--text-dim); margin-top: 1rem;">Try adjusting your filters or run discovery to
+                    find new opportunities.</p>
             </div>
             {% endif %}
 

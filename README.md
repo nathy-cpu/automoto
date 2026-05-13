@@ -1,12 +1,13 @@
-# AutoMoto Job Search Interface
+# AutoMoto — RFP & Consulting Lead Discovery
 
-Django app for searching jobs across supported job sites and user-defined custom job boards.
+Django app for discovering software project contracts, RFPs, and consulting opportunities across public procurement platforms and job boards.
 
 ## Current Scope
 
-- Built-in sources: `Indeed`, `LinkedIn`, `We Work Remotely`, `Arbeitnow (API)`, `Remotive (API)`
+- Built-in sources: `Indeed`, `LinkedIn`, `We Work Remotely`, `Arbeitnow (API)`, `Remotive (API)`, `TED EU Tenders`, `UK Contracts Finder`
 - Custom sources: user-managed websites using CSS selectors
 - Server-rendered dashboard with database-backed results and pagination
+- Scheduled discovery runs with email summaries for subscribed users
 
 ## Quick Start
 

@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Manage Custom Websites - Job Scraper</title>
+        <title>Manage Lead Sources | AutoMoto</title>
         <link
             href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap"
             rel="stylesheet"
@@ -23,6 +23,9 @@
                 <a href="{% url 'manage_websites' %}" class="nav-link active"
                     >Manage Sources</a
                 >
+                <a href="{% url 'scheduled_scrapes' %}" class="nav-link"
+                    >Scheduled Scrapes</a
+                >
             </nav>
             <div class="actions">
                 <a href="{% url 'password_change' %}" class="nav-link"
@@ -39,7 +42,7 @@
 
         <div class="container">
             <div class="title-section">
-                <h1>Custom Websites</h1>
+                <h1>Lead Sources</h1>
             </div>
 
             {% if messages %} {% for message in messages %}
@@ -51,7 +54,7 @@
             {% endfor %} {% endif %}
 
             <div class="website-form-card">
-                <h2>Add New Website</h2>
+                <h2>Add New Lead Source</h2>
                 <form method="post">
                     {% csrf_token %}
 
@@ -62,7 +65,7 @@
                                 type="text"
                                 id="name"
                                 name="name"
-                                placeholder="e.g. MyJobSite"
+                                placeholder="e.g. MyRfpBoard"
                                 required
                             />
                             <div class="help-text">
@@ -89,7 +92,7 @@
                             type="url"
                             id="search_url"
                             name="search_url"
-                            placeholder="https://example.com/jobs?q={keywords}&loc={location}"
+                            placeholder="https://example.com/search?q={keywords}&loc={location}"
                             required
                         />
                         <div class="help-text">
