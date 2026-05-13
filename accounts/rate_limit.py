@@ -1,20 +1,21 @@
 from django.conf import settings
 from django.core.cache import cache
+from django.http import HttpRequest
 
 
-def get_client_ip(request):
+def get_client_ip(request: HttpRequest) -> str:
     forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "")
     if forwarded_for:
         return forwarded_for.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR", "unknown")
 
 
-def should_skip_rate_limit(request):
+def should_skip_rate_limit(request: HttpRequest) -> bool:
     path = request.path
     return path.startswith(settings.STATIC_URL) or path.startswith(settings.MEDIA_URL)
 
 
-def record_request_limit(namespace, identifier, limit, window_seconds):
+def record_request_limit(namespace: str, identifier: str, limit: int, window_seconds: int) -> tuple[bool, int]:
     cache_key = f"ratelimit:{namespace}:{identifier}"
     added = cache.add(cache_key, 1, timeout=window_seconds)
     if added:

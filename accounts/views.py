@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.views import LoginView
-from django.http import HttpResponse
+from django.http import HttpRequest, HttpResponse
+from typing import Any
 
 from .forms import EmailAuthenticationForm
 from .rate_limit import get_client_ip, record_request_limit
@@ -10,7 +11,7 @@ class RateLimitedLoginView(LoginView):
     authentication_form = EmailAuthenticationForm
     template_name = "registration/login.html"
 
-    def dispatch(self, request, *args, **kwargs):
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         if request.method == "POST":
             email = (request.POST.get("username") or "").strip().lower()
             identifier = f"{get_client_ip(request)}:{email or 'anonymous'}"

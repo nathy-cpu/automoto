@@ -44,7 +44,7 @@ class Job(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.title} at {self.company}"
 
 
@@ -113,7 +113,7 @@ class CustomWebsite(models.Model):
     class Meta:
         ordering = ["name"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -136,7 +136,7 @@ class Contact(models.Model):
             )
         ]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.name} ({self.title}) at {self.job.company}"
 
 
@@ -170,7 +170,7 @@ class ScraperExecutionLog(models.Model):
     class Meta:
         ordering = ["-timestamp"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         status = "Error" if self.error_message else "Success"
         return f"{self.website.name} - {self.timestamp.strftime('%Y-%m-%d %H:%M')} [{status}]"
 
@@ -213,10 +213,10 @@ class ScheduledScrape(models.Model):
     class Meta:
         ordering = ["name"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def clean(self):
+    def clean(self) -> None:
         super().clean()
         if self.timezone not in available_timezones():
             from django.core.exceptions import ValidationError
@@ -247,5 +247,5 @@ class ScheduledScrapeRun(models.Model):
     class Meta:
         ordering = ["-started_at"]
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.schedule.name} @ {self.started_at:%Y-%m-%d %H:%M}"

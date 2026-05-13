@@ -3,10 +3,12 @@ from django.core.mail import send_mail
 from django.urls import reverse
 from django.utils import timezone
 
+from .models import Job, ScheduledScrape, ScheduledScrapeRun
+
 
 def send_scheduled_scrape_summary(
-    schedule, run, new_jobs, site_domain="localhost:8000"
-):
+    schedule: ScheduledScrape, run: ScheduledScrapeRun, new_jobs: list[Job], site_domain: str = "localhost:8000"
+) -> int:
     recipients = [
         user.email.strip()
         for user in schedule.subscribers.all()
@@ -30,8 +32,8 @@ def send_scheduled_scrape_summary(
 
 
 def build_scheduled_scrape_summary(
-    schedule, run, new_jobs, site_domain="localhost:8000"
-):
+    schedule: ScheduledScrape, run: ScheduledScrapeRun, new_jobs: list[Job], site_domain: str = "localhost:8000"
+) -> str:
     top_jobs = list(new_jobs[:10])
     location_summary = schedule.countries or schedule.continents or schedule.location
     lines = [

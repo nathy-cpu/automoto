@@ -2,12 +2,13 @@ import logging
 import time
 import uuid
 from datetime import datetime
-from typing import List
+from typing import Any, List, Optional, Tuple
 
 from django.conf import settings
 from django.core.files.base import ContentFile
 
 import requests
+from requests import Response
 
 from .models import CustomWebsite, Job, ScraperExecutionLog
 
@@ -20,7 +21,7 @@ class ApiScraper:
     Bypasses browser stealth scraping entirely for faster, reliable data fetching.
     """
 
-    def __init__(self, run_id=None):
+    def __init__(self, run_id: Optional[str] = None) -> None:
         self._run_id = run_id
 
     def scrape(self, website: CustomWebsite, keywords: str, location: str) -> List[Job]:
@@ -90,11 +91,11 @@ class ApiScraper:
         finally:
             self._run_id = None
 
-    def _ensure_run_id(self):
+    def _ensure_run_id(self) -> None:
         if not self._run_id:
             self._run_id = uuid.uuid4().hex[:8]
 
-    def _log_scrape_start(self, website: CustomWebsite):
+    def _log_scrape_start(self, website: CustomWebsite) -> None:
         logger.info(
             "api_scrape_start run_id=%s website_id=%s website=%s",
             self._run_id,
@@ -102,7 +103,7 @@ class ApiScraper:
             website.name,
         )
 
-    def _fetch_response(self, website: CustomWebsite, keywords: str, location: str):
+    def _fetch_response(self, website: CustomWebsite, keywords: str, location: str) -> Response:
         url = website.search_url.format(keywords=keywords, location=location, page=1)
         logger.info(
             "api_fetch_start run_id=%s website_id=%s url=%s",
@@ -112,7 +113,7 @@ class ApiScraper:
         )
         return requests.get(url, timeout=settings.API_SCRAPER_TIMEOUT_SECONDS)
 
-    def _parse_response(self, response):
+    def _parse_response(self, response: Response) -> Tuple[Any, str, str]:
         json_dump = response.text if hasattr(response, "text") else ""
         try:
             response.raise_for_status()
@@ -123,10 +124,10 @@ class ApiScraper:
     def _collect_job_entries(
         self,
         website: CustomWebsite,
-        data,
-        keyword_terms,
+        data: Any,
+        keyword_terms: List[str],
         keywords: str,
-    ):
+    ) -> Tuple[List[dict], int, int, str]:
         job_list = self._get_nested_data(data, website.api_jobs_path)
         if not job_list or not isinstance(job_list, list):
             return [], 0, 0, f"No job list found at path '{website.api_jobs_path}'"
@@ -144,7 +145,7 @@ class ApiScraper:
 
         return job_entries, payload_jobs_count, matched_jobs_count, ""
 
-    def _build_job_entry(self, website: CustomWebsite, item, keyword_terms):
+    def _build_job_entry(self, website: CustomWebsite, item: Any, keyword_terms: List[str]) -> Optional[dict]:
         try:
             job_data = {
                 "title": self._get_val(item, website.api_title_key),
@@ -184,7 +185,7 @@ class ApiScraper:
             )
             return None
 
-    def _save_jobs(self, job_entries):
+    def _save_jobs(self, job_entries: List[dict]) -> List[Job]:
         saved_jobs = []
         for job_entry in job_entries:
             job, created = Job.objects.update_or_create(
@@ -201,7 +202,7 @@ class ApiScraper:
         payload_jobs_count: int,
         matched_jobs_count: int,
         keywords: str,
-    ):
+    ) -> str:
         if error_msg:
             return error_msg
         if matched_jobs_count:
@@ -218,7 +219,7 @@ class ApiScraper:
         jobs_found: int,
         error_message: str,
         json_dump: str,
-    ):
+    ) -> None:
         log = ScraperExecutionLog.objects.create(
             website=website,
             scraper_type="api",
@@ -242,7 +243,7 @@ class ApiScraper:
         saved_jobs_count: int,
         started_at: float,
         has_error: bool,
-    ):
+    ) -> None:
         logger.info(
             "api_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_matched=%s jobs_new=%s duration_ms=%s has_error=%s",
             self._run_id,
@@ -255,7 +256,7 @@ class ApiScraper:
             has_error,
         )
 
-    def _get_nested_data(self, data, path):
+    def _get_nested_data(self, data: Any, path: str) -> Any:
         if not path:
             return data
         keys = path.split(".")
@@ -266,7 +267,7 @@ class ApiScraper:
                 return None
         return data
 
-    def _get_val(self, item, key):
+    def _get_val(self, item: Any, key: str) -> str:
         if not key:
             return ""
         return str(self._get_nested_data(item, key) or "")

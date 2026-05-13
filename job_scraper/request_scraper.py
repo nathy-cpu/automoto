@@ -3,7 +3,7 @@ import random
 import re
 import time
 import uuid
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
 from django.conf import settings
@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 class JobScraper:
     """Enhanced scraper that can handle multiple websites and extract detailed job information"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.session = requests.Session()
         self.session.headers.update(
             {
@@ -371,7 +371,7 @@ class JobScraper:
 
         return jobs
 
-    def _get_custom_details(self, job_url: str, website: CustomWebsite) -> Dict:
+    def _get_custom_details(self, job_url: str, website: CustomWebsite) -> dict[str, Any]:
         """Fetch job detail page using custom selectors"""
         try:
             response = self.session.get(
@@ -420,7 +420,7 @@ class JobScraper:
         custom_website: CustomWebsite,
         page_number: int,
         card_number: int,
-    ) -> Optional[Dict]:
+    ) -> Optional[dict[str, Any]]:
         """Parse job card using custom selectors"""
         try:
             # Extract basic information using custom selectors
@@ -478,7 +478,7 @@ class JobScraper:
             )
             return None
 
-    def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
+    def _enrich_job_data(self, job_data: dict[str, Any], description: str, keywords: str) -> dict[str, Any]:
         """Apply heuristic parsing to fill in missing fields."""
 
         # 1. Location parsing (City, Country, Continent)

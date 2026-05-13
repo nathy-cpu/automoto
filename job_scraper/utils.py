@@ -67,11 +67,11 @@ COUNTRY_SPECIAL_CASES = {
 LOCATION_SPLIT_RE = re.compile(r"\s*,\s*")
 
 
-def parse_csv_list(value):
+def parse_csv_list(value: str) -> list[str]:
     return [item.strip() for item in (value or "").split(",") if item.strip()]
 
 
-def resolve_scrape_location(countries="", continents="", fallback_location="us"):
+def resolve_scrape_location(countries: str = "", continents: str = "", fallback_location: str = "us") -> str:
     country_filters = parse_csv_list(countries)
     if country_filters:
         return country_filters[0]
@@ -83,7 +83,7 @@ def resolve_scrape_location(countries="", continents="", fallback_location="us")
     return (fallback_location or "us").strip() or "us"
 
 
-def get_continent_from_country(country_name):
+def get_continent_from_country(country_name: str) -> str:
     """
     Returns the continent name for a given country name.
     """
@@ -126,7 +126,7 @@ def get_continent_from_country(country_name):
         return "Unknown"
 
 
-def parse_location_components(location_text):
+def parse_location_components(location_text: str) -> dict[str, str]:
     """Normalize location text into city/country/continent."""
     loc_text = (location_text or "").strip()
     if not loc_text:

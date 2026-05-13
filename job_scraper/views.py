@@ -9,8 +9,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db import connection
-from django.db.models import Q
-from django.http import HttpRequest
+from django.db.models import Q, QuerySet
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -121,27 +121,27 @@ def normalize_job_continent(country: str, continent: str, location: str) -> str:
 
 
 @login_required
-def dashboard(request: HttpRequest):
+def dashboard(request: HttpRequest) -> HttpResponse:
     """
     Premium Dashboard view for sales teams to filter and manage leads.
     """
     queryset = Job.objects.all().prefetch_related("contacts")
 
     # Filtering
-    def parse_filter(val):
+    def parse_filter(val: str | list[str] | None) -> list[str]:
         if not val:
             return []
         if isinstance(val, list):
             return val
         return [v.strip() for v in val.split(",") if v.strip()]
 
-    def apply_case_insensitive_in_filter(qs, field, values):
+    def apply_case_insensitive_in_filter(qs: QuerySet[Job], field: str, values: list[str]) -> QuerySet[Job]:
         query = Q()
         for value in values:
             query |= Q(**{f"{field}__iexact": value})
         return qs.filter(query)
 
-    def normalize_country_filters(values):
+    def normalize_country_filters(values: list[str]) -> list[str]:
         normalized = []
         for value in values:
             lowered = value.strip().lower()
@@ -151,7 +151,7 @@ def dashboard(request: HttpRequest):
             normalized.append(value.strip())
         return [value for value in normalized if value]
 
-    def apply_country_filter(qs, values):
+    def apply_country_filter(qs: QuerySet[Job], values: list[str]) -> QuerySet[Job]:
         query = Q()
         for value in normalize_country_filters(values):
             query |= Q(country__iexact=value)
@@ -164,7 +164,7 @@ def dashboard(request: HttpRequest):
 
         return qs.filter(query)
 
-    def apply_continent_filter(qs, values):
+    def apply_continent_filter(qs: QuerySet[Job], values: list[str]) -> QuerySet[Job]:
         query = Q()
         for value in values:
             query |= Q(continent__iexact=value)
@@ -273,7 +273,7 @@ def dashboard(request: HttpRequest):
 
 @login_required
 @require_POST
-def trigger_scrape(request: HttpRequest):
+def trigger_scrape(request: HttpRequest) -> HttpResponseRedirect:
     """
     Manually triggers the consolidated scraper.
     """
@@ -326,9 +326,9 @@ def trigger_scrape(request: HttpRequest):
     if settings.DEBUG_ENRICHMENT and new_jobs:
         from .apollo_client import ApolloClient
 
-        def run_enrichment(jobs_list):
+        def run_enrichment(jobs_list: list[Job]) -> None:
             apollo = ApolloClient()
-            for job in jobs_list[:10]:  # Enrich up to 10 jobs
+            for job in jobs_list[:10]:
                 try:
                     apollo.enrich_job_contacts(job)
                 except Exception:
@@ -360,7 +360,7 @@ def trigger_scrape(request: HttpRequest):
 
 
 @login_required
-def job_detail(request: HttpRequest, job_id: int):
+def job_detail(request: HttpRequest, job_id: int) -> HttpResponse:
     try:
         job = get_object_or_404(Job, pk=job_id)
         enrichment_state = "idle"
@@ -382,7 +382,7 @@ def job_detail(request: HttpRequest, job_id: int):
                 if cache.add(lock_key, True, timeout=300):
                     enrichment_state = "running"
 
-                    def run_enrichment(target_job_id):
+                    def run_enrichment(target_job_id: int) -> None:
                         try:
                             target_job = Job.objects.get(pk=target_job_id)
                             count = ApolloClient().enrich_job_contacts(target_job)
@@ -423,7 +423,7 @@ def job_detail(request: HttpRequest, job_id: int):
 
 
 @login_required
-def manage_websites(request: HttpRequest):
+def manage_websites(request: HttpRequest) -> HttpResponse:
     """View to manage custom websites"""
     if request.method == "POST":
         name = request.POST.get("name")
@@ -475,7 +475,7 @@ def manage_websites(request: HttpRequest):
 
 @login_required
 @require_POST
-def delete_website(request: HttpRequest, website_id: int):
+def delete_website(request: HttpRequest, website_id: int) -> HttpResponseRedirect:
     """Delete a custom website"""
     website = get_object_or_404(CustomWebsite, id=website_id)
     website.is_active = False
@@ -485,7 +485,7 @@ def delete_website(request: HttpRequest, website_id: int):
 
 
 @login_required
-def edit_website(request: HttpRequest, website_id: int):
+def edit_website(request: HttpRequest, website_id: int) -> HttpResponse:
     """View to edit an existing custom website configuration"""
     website = get_object_or_404(CustomWebsite, id=website_id)
 

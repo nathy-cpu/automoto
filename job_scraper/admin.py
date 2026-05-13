@@ -1,4 +1,6 @@
 from django.contrib import admin, messages
+from django.db.models import QuerySet
+from django.http import HttpRequest
 
 from .management.commands.run_scheduler import run_scheduled_scrape
 from .models import (
@@ -90,7 +92,7 @@ class ContactAdmin(admin.ModelAdmin):
     list_display = ("name", "title", "company_name", "email", "created_at")
     search_fields = ("name", "title", "email", "job__company")
 
-    def company_name(self, obj):
+    def company_name(self, obj: Contact) -> str:
         return obj.job.company
 
     company_name.short_description = "Company"
@@ -110,7 +112,7 @@ class ScraperExecutionLogAdmin(admin.ModelAdmin):
         "html_dump",
     )
 
-    def has_error(self, obj):
+    def has_error(self, obj: ScraperExecutionLog) -> bool:
         return bool(obj.error_message)
 
     has_error.boolean = True
@@ -180,7 +182,7 @@ class ScheduledScrapeAdmin(admin.ModelAdmin):
     )
 
     @admin.action(description="Run selected schedules now")
-    def run_selected_schedules_now(self, request, queryset):
+    def run_selected_schedules_now(self, request: HttpRequest, queryset: QuerySet[ScheduledScrape]) -> None:
         run_count = 0
         for schedule in queryset:
             run_scheduled_scrape(schedule.id)
@@ -191,12 +193,12 @@ class ScheduledScrapeAdmin(admin.ModelAdmin):
             level=messages.SUCCESS,
         )
 
-    def location_summary(self, obj):
+    def location_summary(self, obj: ScheduledScrape) -> str:
         return obj.countries or obj.continents or obj.location
 
     location_summary.short_description = "Search Region"
 
-    def subscriber_count(self, obj):
+    def subscriber_count(self, obj: ScheduledScrape) -> int:
         return obj.subscribers.count()
 
     subscriber_count.short_description = "Subscribers"
@@ -224,7 +226,7 @@ class ScheduledScrapeRunAdmin(admin.ModelAdmin):
         "email_error",
     )
 
-    def has_email_error(self, obj):
+    def has_email_error(self, obj: ScheduledScrapeRun) -> bool:
         return bool(obj.email_error)
 
     has_email_error.boolean = True

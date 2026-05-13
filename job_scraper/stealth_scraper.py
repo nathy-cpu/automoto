@@ -6,6 +6,8 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime
 
+from typing import Any, Generator
+
 from django.conf import settings
 from django.core.files.base import ContentFile
 
@@ -34,7 +36,7 @@ USER_AGENTS = [
 class StealthScraper:
     """Generic stealth scraper powered by SeleniumBase UC mode."""
 
-    def __init__(self, headless=True, run_id=None):
+    def __init__(self, headless: bool = True, run_id: str | None = None) -> None:
         self.headless = headless
         self._run_id = run_id
         self._driver = None
@@ -42,7 +44,7 @@ class StealthScraper:
 
     def scrape(
         self, website: CustomWebsite, keywords: str, location: str, max_pages: int = 1
-    ):
+    ) -> list[Job]:
         keywords = (keywords or "").strip()
         location = (location or "").strip()
         started_at = time.monotonic()
@@ -87,11 +89,11 @@ class StealthScraper:
         self._reset_run_state()
         return saved_jobs
 
-    def _ensure_run_id(self):
+    def _ensure_run_id(self) -> None:
         if not self._run_id:
             self._run_id = uuid.uuid4().hex[:8]
 
-    def _log_scrape_start(self, website: CustomWebsite, max_pages: int):
+    def _log_scrape_start(self, website: CustomWebsite, max_pages: int) -> None:
         logger.info(
             "stealth_scrape_start run_id=%s website_id=%s website=%s max_pages=%s",
             self._run_id,
@@ -101,7 +103,7 @@ class StealthScraper:
         )
 
     @contextmanager
-    def _driver_session(self):
+    def _driver_session(self) -> Generator[SB, None, None]:
         manager = self._session_manager or self._build_session_manager()
         with manager as driver:
             self._driver = driver
@@ -111,7 +113,7 @@ class StealthScraper:
                 self._driver = None
                 self._session_manager = self._build_session_manager()
 
-    def _build_session_manager(self):
+    def _build_session_manager(self) -> SB:
         width = random.randint(
             settings.STEALTH_WINDOW_WIDTH_MIN,
             settings.STEALTH_WINDOW_WIDTH_MAX,
@@ -132,7 +134,7 @@ class StealthScraper:
             test=True,
         )
 
-    def _scrape_pages(self, website, keywords, location, max_pages, state):
+    def _scrape_pages(self, website: CustomWebsite, keywords: str, location: str, max_pages: int, state: dict[str, Any]) -> None:
         # Visit the domain first to satisfy Selenium's cookie domain rules
         # self._open_url(website.base_url)
         # jitter_sleep(1.5, 3.0)
@@ -149,7 +151,7 @@ class StealthScraper:
             if not should_continue:
                 break
 
-    def _warm_up_session(self):
+    def _warm_up_session(self) -> None:
         warm_up_sites = settings.STEALTH_WARMUP_SITES
         logger.info(
             "starting_browser_warming_phase run_id=%s sites=%d",
@@ -191,7 +193,7 @@ class StealthScraper:
 
         logger.info("browser_warming_complete run_id=%s", self._run_id)
 
-    def _load_cookies(self, cookie_file_path):
+    def _load_cookies(self, cookie_file_path: str) -> bool:
         """Load cookies from a JSON file."""
         import json
         import os
@@ -250,7 +252,7 @@ class StealthScraper:
             )
             return False
 
-    def _scrape_page(self, website, keywords, location, page_num, state):
+    def _scrape_page(self, website: CustomWebsite, keywords: str, location: str, page_num: int, state: dict[str, Any]) -> bool:
         url = website.search_url.format(
             keywords=keywords, location=location, page=page_num
         )
@@ -307,7 +309,7 @@ class StealthScraper:
             )
             return False
 
-    def _attempt_captcha_solver(self, website, page_num, state):
+    def _attempt_captcha_solver(self, website: CustomWebsite, page_num: int, state: dict[str, Any]) -> bool:
         max_retries = settings.STEALTH_CAPTCHA_RETRIES
         for attempt in range(1, max_retries + 1):
             anti_bot_result = self._challenge_state()
@@ -377,7 +379,7 @@ class StealthScraper:
 
         return False
 
-    def _wait_for_primary_selector(self, website, state):
+    def _wait_for_primary_selector(self, website: CustomWebsite, state: dict[str, Any]) -> bool:
         try:
             self._wait_for_selector(website.job_list_selector, 20)
             return True
@@ -395,7 +397,7 @@ class StealthScraper:
             self._capture_artifacts(website, state)
             return False
 
-    def _handle_anti_bot(self, website, job_elements, html_content, state):
+    def _handle_anti_bot(self, website: CustomWebsite, job_elements: Any, html_content: str, state: dict[str, Any]) -> bool:
         anti_bot_result = classify_anti_bot_response(
             html_content=html_content,
             card_count=len(job_elements),
@@ -420,7 +422,7 @@ class StealthScraper:
         self._capture_artifacts(website, state)
         return True
 
-    def _record_challenge_failure(self, website, state, anti_bot_result):
+    def _record_challenge_failure(self, website: CustomWebsite, state: dict[str, Any], anti_bot_result: dict[str, Any]) -> None:
         outcome = record_block_event(website.id)
         logger.error(
             "captcha_challenge_persisted run_id=%s website_id=%s website=%s reason=%s failures=%s",
@@ -436,11 +438,11 @@ class StealthScraper:
         )
         self._capture_artifacts(website, state)
 
-    def _challenge_state(self):
+    def _challenge_state(self) -> dict[str, Any]:
         html_content = self._get_page_source()
         return classify_anti_bot_response(html_content=html_content, card_count=0)
 
-    def _capture_artifacts(self, website, state):
+    def _capture_artifacts(self, website: CustomWebsite, state: dict[str, Any]) -> None:
         try:
             state["html_content"] = self._get_page_source()
             state["screenshot_bytes"] = self._get_screenshot_png()
@@ -452,7 +454,7 @@ class StealthScraper:
                 exc_info=True,
             )
 
-    def _selector_metrics(self, website, job_elements):
+    def _selector_metrics(self, website: CustomWebsite, job_elements: Any) -> str:
         coverage = compute_selector_coverage(
             job_elements,
             {
@@ -466,13 +468,13 @@ class StealthScraper:
         )
         return summarize_selector_coverage(coverage)
 
-    def _collect_jobs_from_page(self, website, keywords, job_elements, state):
+    def _collect_jobs_from_page(self, website: CustomWebsite, keywords: str, job_elements: Any, state: dict[str, Any]) -> None:
         for element in job_elements:
             job_entry = self._parse_job_element(website, keywords, element, state)
             if job_entry is not None:
                 state["all_new_jobs"].append(job_entry)
 
-    def _parse_job_element(self, website, keywords, element, state):
+    def _parse_job_element(self, website: CustomWebsite, keywords: str, element: Any, state: dict[str, Any]) -> dict[str, Any] | None:
         try:
             title = self._select_text(
                 element, website.title_selector, prefer_title=True
@@ -527,7 +529,7 @@ class StealthScraper:
             )
             return None
 
-    def _maybe_fetch_description(self, website, keywords, job_url, state):
+    def _maybe_fetch_description(self, website: CustomWebsite, keywords: str, job_url: str, state: dict[str, Any]) -> str:
         if not website.description_selector:
             return ""
         if state["detail_fetch_count"] >= state["detail_fetch_limit"]:
@@ -559,7 +561,7 @@ class StealthScraper:
             )
             return ""
 
-    def _save_jobs(self, job_entries):
+    def _save_jobs(self, job_entries: list[dict[str, Any]]) -> list[Job]:
         saved_jobs = []
         for job_entry in job_entries:
             job, created = Job.objects.update_or_create(
@@ -570,7 +572,7 @@ class StealthScraper:
                 saved_jobs.append(job)
         return saved_jobs
 
-    def _finalize_error_message(self, error_msg, jobs_seen, card_parse_failures):
+    def _finalize_error_message(self, error_msg: str, jobs_seen: int, card_parse_failures: int) -> str:
         if error_msg:
             return error_msg
         if jobs_seen == 0 and card_parse_failures:
@@ -581,7 +583,7 @@ class StealthScraper:
             return "No jobs found. CSS selectors may be outdated or the site is blocking silently."
         return ""
 
-    def _log_execution(self, website: CustomWebsite, state):
+    def _log_execution(self, website: CustomWebsite, state: dict[str, Any]) -> None:
         log = ScraperExecutionLog.objects.create(
             website=website,
             scraper_type="seleniumbase",
@@ -602,7 +604,7 @@ class StealthScraper:
                 save=True,
             )
 
-    def _log_scrape_done(self, website, started_at, saved_jobs, state):
+    def _log_scrape_done(self, website: CustomWebsite, started_at: float, saved_jobs: list[Job], state: dict[str, Any]) -> None:
         logger.info(
             "stealth_scrape_done run_id=%s website_id=%s website=%s jobs_seen=%s jobs_new=%s duration_ms=%s has_error=%s selector_metrics=%s detail_fetches=%s detail_fetch_disabled=%s detail_fetch_session_failures=%s card_parse_failures=%s",
             self._run_id,
@@ -619,12 +621,12 @@ class StealthScraper:
             state["card_parse_failures"],
         )
 
-    def _reset_run_state(self):
+    def _reset_run_state(self) -> None:
         self._run_id = None
         self._driver = None
         self._session_manager = self._build_session_manager()
 
-    def _select_text(self, element, selector, prefer_title=False):
+    def _select_text(self, element: Any, selector: str, prefer_title: bool = False) -> str:
         if not selector:
             return ""
         selected = element.select_one(selector)
@@ -634,7 +636,7 @@ class StealthScraper:
             return selected.get("title") or selected.get_text(strip=True)
         return selected.get_text(strip=True)
 
-    def _select_url(self, element, website):
+    def _select_url(self, element: Any, website: CustomWebsite) -> str:
         if not website.job_link_selector:
             return ""
         link_elem = element.select_one(website.job_link_selector)
@@ -644,7 +646,7 @@ class StealthScraper:
 
         return urljoin(website.base_url, link_elem.get("href"))
 
-    def _simulate_browse(self):
+    def _simulate_browse(self) -> None:
         try:
             self._driver.execute_script(
                 "window.scrollTo(0, Math.floor(document.body.scrollHeight * 0.2));"
@@ -658,7 +660,7 @@ class StealthScraper:
         except Exception:
             logger.debug("stealth_browse_simulation_failed", exc_info=True)
 
-    def _apply_stealth_patches(self):
+    def _apply_stealth_patches(self) -> None:
         try:
             self._driver.execute_cdp_cmd(
                 "Page.addScriptToEvaluateOnNewDocument",
@@ -687,37 +689,37 @@ class StealthScraper:
                 exc_info=True,
             )
 
-    def _open_url(self, url):
+    def _open_url(self, url: str) -> None:
         self._driver.activate_cdp_mode(url)
         self._apply_stealth_patches()
 
-    def _solve_captcha(self):
+    def _solve_captcha(self) -> None:
         try:
             self._driver.uc_gui_click_captcha()
         except Exception:
             self._driver.solve_captcha()
 
-    def _wait_for_selector(self, selector, timeout):
+    def _wait_for_selector(self, selector: str, timeout: int) -> None:
         self._driver.wait_for_element_present(
             selector, by="css selector", timeout=timeout
         )
 
-    def _get_page_source(self):
+    def _get_page_source(self) -> str:
         return self._driver.get_page_source()
 
-    def _get_screenshot_png(self):
+    def _get_screenshot_png(self) -> bytes:
         return self._driver.driver.get_screenshot_as_png()
 
-    def _open_new_tab(self):
+    def _open_new_tab(self) -> None:
         self._driver.open_new_tab(switch_to=True)
 
-    def _switch_to_newest_window(self):
+    def _switch_to_newest_window(self) -> None:
         self._driver.switch_to_newest_window()
 
-    def _switch_to_default_window(self):
+    def _switch_to_default_window(self) -> None:
         self._driver.switch_to_default_window()
 
-    def _get_description_selenium(self, job_url, selector):
+    def _get_description_selenium(self, job_url: str, selector: str) -> str:
         try:
             self._open_new_tab()
             self._switch_to_newest_window()
@@ -764,12 +766,12 @@ class StealthScraper:
                 raise
             return ""
 
-    def _is_invalid_session_error(self, exc):
+    def _is_invalid_session_error(self, exc: Exception) -> bool:
         return exc.__class__.__name__ == "InvalidSessionIdException" or (
             "invalid session id" in str(exc).lower()
         )
 
-    def _enrich_job_data(self, job_data: dict, description: str, keywords: str) -> dict:
+    def _enrich_job_data(self, job_data: dict[str, Any], description: str, keywords: str) -> dict[str, Any]:
         geo = parse_location_components(job_data.get("location", ""))
         job_data["city"] = geo["city"]
         job_data["country"] = geo["country"]

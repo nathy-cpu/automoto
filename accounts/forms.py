@@ -17,7 +17,7 @@ class EmailAuthenticationForm(AuthenticationForm):
         ),
     )
 
-    def clean_username(self):
+    def clean_username(self) -> str:
         return self.cleaned_data["username"].strip().lower()
 
 
@@ -29,14 +29,14 @@ class UserCreationForm(forms.ModelForm):
         model = User
         fields = ("email",)
 
-    def clean_password2(self):
+    def clean_password2(self) -> str | None:
         password1 = self.cleaned_data.get("password1")
         password2 = self.cleaned_data.get("password2")
         if password1 and password2 and password1 != password2:
             raise forms.ValidationError("Passwords do not match.")
         return password2
 
-    def save(self, commit=True):
+    def save(self, commit: bool = True) -> User:
         user = super().save(commit=False)
         user.set_password(self.cleaned_data["password1"])
         if commit:
@@ -51,5 +51,5 @@ class UserChangeForm(forms.ModelForm):
         model = User
         fields = ("email", "password", "is_active", "is_staff", "is_superuser")
 
-    def clean_password(self):
+    def clean_password(self) -> str:
         return self.initial["password"]
