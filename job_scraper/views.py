@@ -302,19 +302,29 @@ def trigger_scrape(request: HttpRequest) -> HttpResponseRedirect:
         except ValueError:
             pass
 
+    from .management.commands.run_scraper import _split_keyword_phrases
+
     scraper = JobScraper()
+    phrases = _split_keyword_phrases(keywords)
     logger.info(
-        "manual_scrape_start website_id=%s location=%s keywords=%s",
+        "manual_scrape_start website_id=%s location=%s keywords=%s phrases=%d",
         website_id,
         location,
         keywords,
+        len(phrases),
     )
-    new_jobs = scraper.get_recent_jobs(
-        location,
-        keywords,
-        max_pages=settings.DEFAULT_SCRAPE_MAX_PAGES,
-        website_id=website_id,
-    )
+    seen_urls: set[str] = set()
+    new_jobs: list[Job] = []
+    for phrase in phrases:
+        for job in scraper.get_recent_jobs(
+            location,
+            phrase,
+            max_pages=settings.DEFAULT_SCRAPE_MAX_PAGES,
+            website_id=website_id,
+        ):
+            if job.source_url not in seen_urls:
+                seen_urls.add(job.source_url)
+                new_jobs.append(job)
     logger.info(
         "manual_scrape_done website_id=%s jobs_new=%s",
         website_id,

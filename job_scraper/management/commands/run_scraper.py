@@ -10,6 +10,10 @@ from job_scraper.request_scraper import JobScraper
 logger = logging.getLogger(__name__)
 
 
+def _split_keyword_phrases(keywords: str) -> list[str]:
+    return [phrase.strip() for phrase in keywords.split(",") if phrase.strip()]
+
+
 def execute_scrape_run(
     *,
     keywords: str,
@@ -21,28 +25,33 @@ def execute_scrape_run(
     started_at = time.monotonic()
     scraper = JobScraper()
     all_new_jobs = []
+    seen_urls: set[str] = set()
     website_ids = website_ids or [None]
     limit = settings.DEFAULT_ENRICHMENT_LIMIT if limit is None else limit
     max_pages = settings.DEFAULT_SCRAPE_MAX_PAGES if max_pages is None else max_pages
+    phrases = _split_keyword_phrases(keywords)
 
     logger.info(
-        "run_scraper_start keywords=%s location=%s limit=%s max_pages=%s website_ids=%s",
+        "run_scraper_start keywords=%s phrases=%d location=%s limit=%s max_pages=%s website_ids=%s",
         keywords,
+        len(phrases),
         location,
         limit,
         max_pages,
         website_ids,
     )
 
-    for website_id in website_ids:
-        all_new_jobs.extend(
-            scraper.get_recent_jobs(
+    for phrase in phrases:
+        for website_id in website_ids:
+            for job in scraper.get_recent_jobs(
                 location,
-                keywords,
+                phrase,
                 max_pages=max_pages,
                 website_id=website_id,
-            )
-        )
+            ):
+                if job.source_url not in seen_urls:
+                    seen_urls.add(job.source_url)
+                    all_new_jobs.append(job)
 
     apollo = ApolloClient()
     enriched_count = 0

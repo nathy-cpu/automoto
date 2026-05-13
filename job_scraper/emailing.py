@@ -7,7 +7,10 @@ from .models import Job, ScheduledScrape, ScheduledScrapeRun
 
 
 def send_scheduled_scrape_summary(
-    schedule: ScheduledScrape, run: ScheduledScrapeRun, new_jobs: list[Job], site_domain: str = "localhost:8000"
+    schedule: ScheduledScrape,
+    run: ScheduledScrapeRun,
+    new_jobs: list[Job],
+    site_domain: str = "localhost:8000",
 ) -> int:
     recipients = [
         user.email.strip()
@@ -32,7 +35,10 @@ def send_scheduled_scrape_summary(
 
 
 def build_scheduled_scrape_summary(
-    schedule: ScheduledScrape, run: ScheduledScrapeRun, new_jobs: list[Job], site_domain: str = "localhost:8000"
+    schedule: ScheduledScrape,
+    run: ScheduledScrapeRun,
+    new_jobs: list[Job],
+    site_domain: str = "localhost:8000",
 ) -> str:
     top_jobs = list(new_jobs[:10])
     location_summary = schedule.countries or schedule.continents or schedule.location
@@ -43,7 +49,7 @@ def build_scheduled_scrape_summary(
         f"Search region: {location_summary or 'us'}",
         f"New jobs found: {run.jobs_new}",
         "",
-        "Top new jobs:",
+        "Top new leads:",
     ]
 
     if not top_jobs:
