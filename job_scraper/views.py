@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 
 from .models import CustomWebsite, Job, ScheduledScrape
 from .request_scraper import JobScraper
-from .utils import resolve_scrape_location
+from .utils import describe_cron, resolve_scrape_location
 
 logger = logging.getLogger(__name__)
 
@@ -551,6 +551,7 @@ def scheduled_scrapes(request: HttpRequest) -> HttpResponse:
         schedule_data.append(
             {
                 "schedule": schedule,
+                "cron_description": describe_cron(schedule.cron_expression),
                 "website_names": ", ".join(
                     schedule.websites.values_list("name", flat=True)
                 ),

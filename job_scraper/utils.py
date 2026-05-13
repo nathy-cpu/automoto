@@ -67,8 +67,82 @@ COUNTRY_SPECIAL_CASES = {
 LOCATION_SPLIT_RE = re.compile(r"\s*,\s*")
 
 
+WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+
 def parse_csv_list(value: str) -> list[str]:
     return [item.strip() for item in (value or "").split(",") if item.strip()]
+
+
+def describe_cron(cron_expression: str) -> str:
+    parts = cron_expression.strip().split()
+    if len(parts) != 5:
+        return cron_expression
+
+    minute, hour, dom, month, dow = parts
+
+    if minute == "0" and hour == "0" and dom == "*" and month == "*" and dow == "*":
+        return "Once per day at midnight"
+    if minute == "0" and hour.startswith("*/"):
+        interval = hour[2:]
+        return f"Every {interval} hours"
+    if minute == "0" and "," in hour and dom == "*" and month == "*" and (dow == "*" or dow == "?"):
+        times = ", ".join(_format_hour(h) for h in hour.split(","))
+        return f"Daily at {times}"
+    if minute == "0" and "," in hour and dom == "*" and month == "*" and dow != "*" and dow != "?":
+        day_names = _expand_dow(dow)
+        times = ", ".join(_format_hour(h) for h in hour.split(","))
+        return f"Every {day_names} at {times}"
+    if minute == "0" and hour != "*" and hour != "?" and dom == "*" and month == "*" and (dow == "*" or dow == "?"):
+        return f"Daily at {_format_hour(hour)}"
+    if minute == "0" and hour != "*" and hour != "?" and dom == "*" and month == "*" and dow != "*" and dow != "?":
+        day_names = _expand_dow(dow)
+        return f"Every {day_names} at {_format_hour(hour)}"
+    if minute.startswith("*/"):
+        interval = minute[2:]
+        return f"Every {interval} minutes"
+    if dom != "*" and dom != "?" and dom.isdigit():
+        day = _ordinal(int(dom))
+        return f"{_month_name(month)} {day} at {_format_hour(hour)}" if month != "*" else f"On the {day} of each month at {_format_hour(hour)}"
+
+    return cron_expression
+
+
+def _format_hour(hour: str) -> str:
+    h = int(hour)
+    period = "am" if h < 12 else "pm"
+    display = h if h <= 12 else h - 12
+    return f"{display}:00{period}"
+
+
+def _expand_dow(dow: str) -> str:
+    if "*" in dow or "?" in dow:
+        return "day"
+    if "," in dow:
+        return ", ".join(WEEKDAYS[int(d)] for d in dow.split(",") if d.isdigit())
+    if "-" in dow:
+        parts_list = dow.split("-")
+        start, end = int(parts_list[0]), int(parts_list[1])
+        return ", ".join(WEEKDAYS[i] for i in range(start, end + 1) if i < 7)
+    if dow.isdigit():
+        return WEEKDAYS[int(dow)]
+    return dow
+
+
+def _month_name(month: str) -> str:
+    months = ["", "january", "february", "march", "april", "may", "june",
+              "july", "august", "september", "october", "november", "december"]
+    if month.isdigit():
+        m = int(month)
+        return months[m] if 1 <= m <= 12 else month
+    return month
+
+
+def _ordinal(n: int) -> str:
+    if 11 <= n <= 13:
+        return f"{n}th"
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
 
 
 def resolve_scrape_location(countries: str = "", continents: str = "", fallback_location: str = "us") -> str:

@@ -184,7 +184,7 @@
                     <div class="schedule-info">
                         <div class="schedule-title">{{ item.schedule.name }}</div>
                         <div class="schedule-meta">
-                            <span><span class="label">Cron</span> {{ item.schedule.cron_expression }}</span>
+                            <span><span class="label">Schedule</span> {{ item.cron_description }}</span>
                             <span><span class="label">Timezone</span> {{ item.schedule.timezone }}</span>
                             <span><span class="label">Keywords</span> {{ item.schedule.keywords|default:"(none)" }}</span>
                             <span><span class="label">Region</span> {{ item.schedule.countries|default:item.schedule.continents|default:item.schedule.location }}</span>
