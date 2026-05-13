@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
-from django.core import mail
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -138,7 +138,9 @@ class ScheduledScrapeSchedulerTests(TestCase):
             website_ids=[self.website_one.id, self.website_two.id],
         )
 
-    def test_register_scheduled_scrapes_only_registers_active_schedules_with_sources(self):
+    def test_register_scheduled_scrapes_only_registers_active_schedules_with_sources(
+        self,
+    ):
         active = ScheduledScrape.objects.create(
             name="Active",
             keywords="python",
@@ -184,9 +186,7 @@ class ScheduledScrapeSchedulerTests(TestCase):
         SITE_DOMAIN="app.example.com",
     )
     @patch("job_scraper.management.commands.run_scheduler.execute_scrape_run")
-    def test_run_scheduled_scrape_emails_summary_to_subscribers(
-        self, execute_mock
-    ):
+    def test_run_scheduled_scrape_emails_summary_to_subscribers(self, execute_mock):
         schedule = ScheduledScrape.objects.create(
             name="Email Run",
             keywords="python",
@@ -222,7 +222,9 @@ class ScheduledScrapeSchedulerTests(TestCase):
         self.assertEqual(run.emails_sent, 2)
         self.assertEqual(run.email_error, "")
         self.assertEqual(len(mail.outbox), 1)
-        self.assertEqual(set(mail.outbox[0].to), {"sub1@example.com", "sub2@example.com"})
+        self.assertEqual(
+            set(mail.outbox[0].to), {"sub1@example.com", "sub2@example.com"}
+        )
         self.assertIn("Top new jobs:", mail.outbox[0].body)
         self.assertIn("Role 0 at Acme", mail.outbox[0].body)
         self.assertIn("Additional new jobs not listed: 2", mail.outbox[0].body)
@@ -232,7 +234,9 @@ class ScheduledScrapeSchedulerTests(TestCase):
         DEFAULT_FROM_EMAIL="automoto@example.com",
     )
     @patch("job_scraper.management.commands.run_scheduler.execute_scrape_run")
-    @patch("job_scraper.management.commands.run_scheduler.send_scheduled_scrape_summary")
+    @patch(
+        "job_scraper.management.commands.run_scheduler.send_scheduled_scrape_summary"
+    )
     def test_run_scheduled_scrape_records_email_errors(
         self, send_summary_mock, execute_mock
     ):
@@ -677,7 +681,7 @@ class StealthScraperRegressionTests(TestCase):
         driver.window_handles = ["main"]
 
         sb = Mock()
-        sb.get_page_source.side_effect = [blocked_html, blocked_html, blocked_html]
+        sb.get_page_source.return_value = blocked_html
         sb.driver = driver
         sb_mock.return_value.__enter__.return_value = sb
 
@@ -686,7 +690,7 @@ class StealthScraperRegressionTests(TestCase):
         )
 
         self.assertEqual(jobs, [])
-        solve_captcha_mock.assert_called_once()
+        self.assertEqual(solve_captcha_mock.call_count, 2)
         wait_for_selector_mock.assert_not_called()
         latest_log = ScraperExecutionLog.objects.order_by("-timestamp").first()
         self.assertIn(

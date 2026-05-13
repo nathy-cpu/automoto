@@ -2,7 +2,6 @@ from django.core.management.base import BaseCommand
 
 from job_scraper.models import CustomWebsite
 
-
 DEFAULT_WEBSITES = [
     {
         "name": "Indeed",

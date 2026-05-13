@@ -136,7 +136,7 @@ class StealthScraper:
         # Visit the domain first to satisfy Selenium's cookie domain rules
         # self._open_url(website.base_url)
         # jitter_sleep(1.5, 3.0)
-        
+
         # # load cookies if available
         # self._load_cookies(f"{website.name}_cookies.json")
         # self._driver.refresh()
@@ -150,7 +150,6 @@ class StealthScraper:
                 break
 
     def _warm_up_session(self):
-        """Build trust by visiting neutral sites before the target."""
         warm_up_sites = settings.STEALTH_WARMUP_SITES
         logger.info(
             "starting_browser_warming_phase run_id=%s sites=%d",
@@ -163,11 +162,12 @@ class StealthScraper:
                 self._driver.uc_open_with_reconnect(
                     site, reconnect_time=settings.STEALTH_RECONNECT_TIME_SECONDS
                 )
+                self._apply_stealth_patches()
                 jitter_sleep(
                     settings.STEALTH_WARMUP_PAGE_JITTER_MIN_SECONDS,
                     settings.STEALTH_WARMUP_PAGE_JITTER_MAX_SECONDS,
                 )
-                # Simulate a little bit of interest
+                self._simulate_browse()
                 self._driver.execute_script(
                     f"window.scrollTo(0, {random.randint(300, 700)});"
                 )
@@ -175,6 +175,12 @@ class StealthScraper:
                     settings.STEALTH_WARMUP_SCROLL_JITTER_MIN_SECONDS,
                     settings.STEALTH_WARMUP_SCROLL_JITTER_MAX_SECONDS,
                 )
+                self._driver.execute_script(
+                    f"window.scrollTo(0, {random.randint(800, 1200)});"
+                )
+                jitter_sleep(0.5, 1.2)
+                self._driver.execute_script("window.scrollTo(0, 0);")
+                jitter_sleep(0.3, 0.8)
             except Exception as e:
                 logger.debug(
                     "warming_site_failed run_id=%s site=%s error=%s",
@@ -205,24 +211,38 @@ class StealthScraper:
             # Using native Selenium to bypass SeleniumBase's folder/naming rules
             for cookie in cookies:
                 # Clean up cookie dict for Selenium compatibility
-                if 'sameSite' in cookie and cookie['sameSite'] not in ["Strict", "Lax", "None"]:
-                    del cookie['sameSite']
-                if 'expirationDate' in cookie:
-                    cookie['expiry'] = int(cookie['expirationDate'])
-                    del cookie['expirationDate']
-                if 'hostOnly' in cookie:
-                    del cookie['hostOnly']
-                if 'session' in cookie:
-                    del cookie['session']
-                if 'storeId' in cookie:
-                    del cookie['storeId']
-                    
+                if "sameSite" in cookie and cookie["sameSite"] not in [
+                    "Strict",
+                    "Lax",
+                    "None",
+                ]:
+                    del cookie["sameSite"]
+                if "expirationDate" in cookie:
+                    cookie["expiry"] = int(cookie["expirationDate"])
+                    del cookie["expirationDate"]
+                if "hostOnly" in cookie:
+                    del cookie["hostOnly"]
+                if "session" in cookie:
+                    del cookie["session"]
+                if "storeId" in cookie:
+                    del cookie["storeId"]
+
                 try:
                     self._driver.driver.add_cookie(cookie)
                 except Exception as e:
-                    logger.debug("cookie_add_failed run_id=%s name=%s error=%s", self._run_id, cookie.get('name'), str(e))
-                    
-            logger.info("cookies_loaded_successfully run_id=%s path=%s count=%d", self._run_id, cookie_file_path, len(cookies))
+                    logger.debug(
+                        "cookie_add_failed run_id=%s name=%s error=%s",
+                        self._run_id,
+                        cookie.get("name"),
+                        str(e),
+                    )
+
+            logger.info(
+                "cookies_loaded_successfully run_id=%s path=%s count=%d",
+                self._run_id,
+                cookie_file_path,
+                len(cookies),
+            )
             return True
         except Exception as e:
             logger.error(
@@ -288,36 +308,74 @@ class StealthScraper:
             return False
 
     def _attempt_captcha_solver(self, website, page_num, state):
-        anti_bot_result = self._challenge_state()
-        if not anti_bot_result["blocked"]:
-            return True
-
-        try:
-            self._solve_captcha()
-            jitter_sleep(2.0, 4.0)
+        max_retries = settings.STEALTH_CAPTCHA_RETRIES
+        for attempt in range(1, max_retries + 1):
             anti_bot_result = self._challenge_state()
-            logger.info(
-                "captcha_solver_attempted run_id=%s website_id=%s page=%s blocked_after_attempt=%s reason=%s",
-                self._run_id,
-                website.id,
-                page_num,
-                anti_bot_result["blocked"],
-                anti_bot_result["reason"],
-            )
-            if anti_bot_result["blocked"]:
+            if not anti_bot_result["blocked"]:
+                return True
+
+            try:
+                self._solve_captcha()
+                jitter_sleep(3.0, 5.0)
+                anti_bot_result = self._challenge_state()
+                logger.info(
+                    "captcha_solver_attempted run_id=%s website_id=%s page=%s attempt=%s blocked_after_attempt=%s reason=%s",
+                    self._run_id,
+                    website.id,
+                    page_num,
+                    attempt,
+                    anti_bot_result["blocked"],
+                    anti_bot_result["reason"],
+                )
+                if not anti_bot_result["blocked"]:
+                    return True
+
+                if attempt < max_retries:
+                    logger.warning(
+                        "captcha_retry_fresh_page run_id=%s website_id=%s page=%s attempt=%s/%s",
+                        self._run_id,
+                        website.id,
+                        page_num,
+                        attempt,
+                        max_retries,
+                    )
+                    try:
+                        current_url = self._driver.driver.current_url
+                        self._driver.driver.get("about:blank")
+                        jitter_sleep(1.0, 2.0)
+                        self._driver.activate_cdp_mode(current_url)
+                        self._apply_stealth_patches()
+                        jitter_sleep(2.0, 3.5)
+                    except Exception:
+                        logger.debug(
+                            "captcha_retry_nav_failed run_id=%s",
+                            self._run_id,
+                            exc_info=True,
+                        )
+                    continue
+
                 self._record_challenge_failure(website, state, anti_bot_result)
                 return False
-            return True
-        except Exception as exc:
-            logger.warning(
-                "captcha_solver_failed run_id=%s website_id=%s error=%s",
-                self._run_id,
-                website.id,
-                str(exc),
-            )
-            self._capture_artifacts(website, state)
-            state["error_msg"] = f"Captcha solver failed: {exc}"
-            return False
+            except Exception as exc:
+                logger.warning(
+                    "captcha_solver_failed run_id=%s website_id=%s error=%s",
+                    self._run_id,
+                    website.id,
+                    str(exc),
+                )
+                if attempt < max_retries:
+                    logger.info(
+                        "captcha_retry_after_exception run_id=%s attempt=%s/%s",
+                        self._run_id,
+                        attempt,
+                        max_retries,
+                    )
+                    continue
+                self._capture_artifacts(website, state)
+                state["error_msg"] = f"Captcha solver failed: {exc}"
+                return False
+
+        return False
 
     def _wait_for_primary_selector(self, website, state):
         try:
@@ -600,8 +658,38 @@ class StealthScraper:
         except Exception:
             logger.debug("stealth_browse_simulation_failed", exc_info=True)
 
+    def _apply_stealth_patches(self):
+        try:
+            self._driver.execute_cdp_cmd(
+                "Page.addScriptToEvaluateOnNewDocument",
+                {
+                    "source": """
+                Object.defineProperty(navigator, 'webdriver', {get: () => false});
+                Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});
+                Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
+                """
+                },
+            )
+            agent = self._driver.driver.execute_script("return navigator.userAgent;")
+            self._driver.execute_cdp_cmd(
+                "Network.setUserAgentOverride",
+                {
+                    "userAgent": agent,
+                    "acceptLanguage": "en-US,en;q=0.9",
+                    "platform": "Win32",
+                },
+            )
+            logger.info("stealth_patches_applied run_id=%s", self._run_id)
+        except Exception:
+            logger.debug(
+                "stealth_patches_failed run_id=%s",
+                self._run_id,
+                exc_info=True,
+            )
+
     def _open_url(self, url):
         self._driver.activate_cdp_mode(url)
+        self._apply_stealth_patches()
 
     def _solve_captcha(self):
         try:

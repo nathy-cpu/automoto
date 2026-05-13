@@ -1,8 +1,9 @@
 from zoneinfo import available_timezones
 
-from apscheduler.triggers.cron import CronTrigger
 from django.conf import settings
 from django.db import models
+
+from apscheduler.triggers.cron import CronTrigger
 
 # Create your models here.
 
@@ -227,7 +228,9 @@ class ScheduledScrape(models.Model):
         except ValueError as exc:
             from django.core.exceptions import ValidationError
 
-            raise ValidationError({"cron_expression": f"Invalid cron expression: {exc}"})
+            raise ValidationError(
+                {"cron_expression": f"Invalid cron expression: {exc}"}
+            )
 
 
 class ScheduledScrapeRun(models.Model):

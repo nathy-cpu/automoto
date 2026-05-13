@@ -11,7 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 def execute_scrape_run(
-    *, keywords: str, location: str, limit: int = None, max_pages: int = None, website_ids=None
+    *,
+    keywords: str,
+    location: str,
+    limit: int = None,
+    max_pages: int = None,
+    website_ids=None,
 ):
     started_at = time.monotonic()
     scraper = JobScraper()

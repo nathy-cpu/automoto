@@ -21,9 +21,9 @@ logger = logging.getLogger(__name__)
 def run_scheduled_scrape(schedule_id):
     run = None
     try:
-        schedule = ScheduledScrape.objects.prefetch_related("websites", "subscribers").get(
-            id=schedule_id, is_active=True
-        )
+        schedule = ScheduledScrape.objects.prefetch_related(
+            "websites", "subscribers"
+        ).get(id=schedule_id, is_active=True)
         run = ScheduledScrapeRun.objects.create(schedule=schedule)
         website_ids = list(schedule.websites.values_list("id", flat=True))
         logger.info(
@@ -74,7 +74,9 @@ def run_scheduled_scrape(schedule_id):
         )
     except Exception:
         if run is not None:
-            run.email_error = "Scheduled scrape run failed before email delivery completed."
+            run.email_error = (
+                "Scheduled scrape run failed before email delivery completed."
+            )
             run.completed_at = timezone.now()
             run.save(update_fields=["email_error", "completed_at"])
         logger.exception("scheduled_scraper_task_failed schedule_id=%s", schedule_id)
