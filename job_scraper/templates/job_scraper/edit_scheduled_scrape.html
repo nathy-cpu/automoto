@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Schedule | AutoMoto</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'job_scraper/css/base.css' %}">
+    <style>
+        .edit-shell {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 2rem;
+            width: 100%;
+        }
+
+        .edit-shell h1 {
+            margin-bottom: 0.25rem;
+        }
+
+        .edit-shell .subtitle {
+            color: var(--text-dim);
+            margin-bottom: 2rem;
+        }
+
+        .edit-card {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: 1.25rem;
+            padding: 2rem;
+        }
+
+        .edit-card form {
+            display: grid;
+            gap: 1.25rem;
+        }
+
+        .form-group {
+            display: grid;
+            gap: 0.4rem;
+        }
+
+        .form-group label {
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.85rem 1rem;
+            border-radius: 0.85rem;
+            border: 1px solid var(--glass-border);
+            background: rgba(15, 23, 42, 0.9);
+            color: var(--text-main);
+            font-family: "Outfit", sans-serif;
+        }
+
+        .form-group .help-text {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+
+        .btn-save {
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+        }
+
+        .btn-cancel {
+            background: transparent;
+            color: var(--text-dim);
+            border: 1px solid var(--glass-border);
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.95rem;
+            text-decoration: none;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .btn-cancel:hover {
+            transform: translateY(-2px);
+        }
+
+        .readonly-field {
+            padding: 0.85rem 1rem;
+            border-radius: 0.85rem;
+            border: 1px solid var(--glass-border);
+            background: rgba(15, 23, 42, 0.5);
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }
+
+        .message {
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .success-message {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <a href="{% url 'dashboard' %}" class="logo">AutoMoto</a>
+        <nav class="nav-menu">
+            <a href="{% url 'dashboard' %}" class="nav-link">Dashboard</a>
+            <a href="{% url 'manage_websites' %}" class="nav-link">Manage Sources</a>
+            <a href="{% url 'scheduled_scrapes' %}" class="nav-link active">Scheduled Scrapes</a>
+        </nav>
+        <div class="actions">
+            <a href="{% url 'password_change' %}" class="nav-link">Change Password</a>
+            <form method="post" action="{% url 'logout' %}">
+                {% csrf_token %}
+                <button type="submit" class="nav-link nav-button">Sign Out</button>
+            </form>
+        </div>
+    </header>
+
+    <main class="edit-shell">
+        <h1>Edit Schedule</h1>
+        <p class="subtitle">{{ schedule.name }}</p>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="message {% if message.tags == 'error' %}error-message{% else %}success-message{% endif %}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="edit-card">
+            <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">
+                Cron: {{ schedule.cron_expression }} &middot; Timezone: {{ schedule.timezone }}
+            </p>
+
+            <form method="post">
+                {% csrf_token %}
+
+                <div class="form-group">
+                    <label for="keywords">Keywords</label>
+                    <input type="text" id="keywords" name="keywords" value="{{ schedule.keywords }}" placeholder="e.g. IT services RFP, software development proposal">
+                    <div class="help-text">Comma-separated search terms</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="countries">Countries</label>
+                    <input type="text" id="countries" name="countries" value="{{ schedule.countries }}" placeholder="e.g. us, uk, germany">
+                    <div class="help-text">Comma-separated list (takes priority over continents)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="continents">Continents</label>
+                    <input type="text" id="continents" name="continents" value="{{ schedule.continents }}" placeholder="e.g. Europe, North America">
+                    <div class="help-text">Comma-separated list (used if countries are blank)</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="location">Fallback Location</label>
+                    <input type="text" id="location" name="location" value="{{ schedule.location }}" placeholder="us">
+                    <div class="help-text">Used only when countries and continents are blank</div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="max_pages">Max Pages</label>
+                        <input type="number" id="max_pages" name="max_pages" value="{{ schedule.max_pages }}" min="1" max="10">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="enrichment_limit">Enrichment Limit</label>
+                        <input type="number" id="enrichment_limit" name="enrichment_limit" value="{{ schedule.enrichment_limit }}" min="0" max="50">
+                        <div class="help-text">Max contacts to enrich per run</div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-save">Save Changes</button>
+                    <a href="{% url 'scheduled_scrapes' %}" class="btn-cancel">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </main>
+</body>
+</html>

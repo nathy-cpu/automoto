@@ -564,3 +564,33 @@ def scheduled_scrapes(request: HttpRequest) -> HttpResponse:
         "job_scraper/scheduled_scrapes.html",
         {"schedule_data": schedule_data},
     )
+
+
+@login_required
+def edit_scheduled_scrape(request: HttpRequest, schedule_id: int) -> HttpResponse:
+    schedule = get_object_or_404(ScheduledScrape, id=schedule_id, is_active=True)
+
+    if request.method == "POST":
+        schedule.keywords = request.POST.get("keywords", "")
+        schedule.countries = request.POST.get("countries", "")
+        schedule.continents = request.POST.get("continents", "")
+        schedule.location = request.POST.get("location", "us")
+        try:
+            schedule.max_pages = int(request.POST.get("max_pages", 1))
+        except (ValueError, TypeError):
+            schedule.max_pages = 1
+        try:
+            schedule.enrichment_limit = int(
+                request.POST.get("enrichment_limit", 10)
+            )
+        except (ValueError, TypeError):
+            schedule.enrichment_limit = 10
+        schedule.save()
+        messages.success(request, f'Updated "{schedule.name}"')
+        return redirect("scheduled_scrapes")
+
+    return render(
+        request,
+        "job_scraper/edit_scheduled_scrape.html",
+        {"schedule": schedule},
+    )

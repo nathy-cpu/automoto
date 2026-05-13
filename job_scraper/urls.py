@@ -12,4 +12,9 @@ urlpatterns = [
     ),
     path("websites/edit/<int:website_id>/", views.edit_website, name="edit_website"),
     path("scheduled/", views.scheduled_scrapes, name="scheduled_scrapes"),
+    path(
+        "scheduled/<int:schedule_id>/edit/",
+        views.edit_scheduled_scrape,
+        name="edit_scheduled_scrape",
+    ),
 ]
